@@ -2,6 +2,10 @@ go-rrd - a pure Go [r]ound [r]obin [d]atabase library
 
 Simple RRD's.
 
+Video of the Example
+======
+https://www.youtube.com/watch?v=rWf1zqOcAag
+
 Installation
 ======
 go get github.com/andrewhodel/rrd
