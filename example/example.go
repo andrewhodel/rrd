@@ -4,7 +4,7 @@ import (
 	"time"
 	//"fmt"
 	//"strconv"
-	"go-rrd/rrd"
+	"github.com/andrewhodel/rrd"
 )
 
 func main() {
