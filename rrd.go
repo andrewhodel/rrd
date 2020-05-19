@@ -66,10 +66,45 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 	fmt.Println("intervalSeconds: " + strconv.FormatInt(intervalSeconds, 10));
 	fmt.Println("totalSteps: " + strconv.FormatInt(totalSteps, 10));
 	fmt.Println("updateTimeStamp: " + strconv.FormatInt(updateTimeStamp, 10));
-	fmt.Println("updateDataPoint: ");
-	fmt.Println(updateDataPoint);
-	fmt.Println("rrdPtr: ");
-	fmt.Printf("%+v\n", rrdPtr)
+	fmt.Println("updateDataPoint:");
+
+	for e := range updateDataPoint {
+		fmt.Printf("\t%f", updateDataPoint[e])
+	}
+	fmt.Println("")
+
+	fmt.Printf("rrdPtr: CurrentStep %d, CurrentAvgCount %d, FirstUpdateTs %d\n", rrdPtr.CurrentStep, rrdPtr.CurrentAvgCount, rrdPtr.FirstUpdateTs);
+	fmt.Println("rrdPtr LastUpdateDataPoint:")
+
+	for e := range rrdPtr.LastUpdateDataPoint {
+		fmt.Printf("\t%f", rrdPtr.LastUpdateDataPoint[e])
+	}
+
+	fmt.Println("")
+
+	fmt.Printf("rrdPtr D (%d):\n", len(rrdPtr.D))
+
+	for e := range rrdPtr.D {
+		for n := range rrdPtr.D[e] {
+			fmt.Printf("\t%f", rrdPtr.D[e][n])
+		}
+		fmt.Println("")
+	}
+
+	fmt.Println("")
+
+	if (rrdPtr.R != nil) {
+		fmt.Printf("rrdPtr R (%d):\n", len(rrdPtr.R))
+
+		for e := range rrdPtr.R {
+			for n := range rrdPtr.R[e] {
+				fmt.Printf("\t%f", rrdPtr.R[e][n])
+			}
+			fmt.Println("")
+		}
+
+		fmt.Println("")
+	}
 
 	// store updateDataPoint array as lastUpdateDataPoint
 	rrdPtr.LastUpdateDataPoint = updateDataPoint;
@@ -165,41 +200,59 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 				if (shift > 0) {
 
 					// shift the data set
-					fmt.Println(ccRed + "FIXME shifting data set by: " + strconv.FormatInt(shift, 10) + ccReset);
+					fmt.Println(ccRed + "shifting data set by: " + strconv.FormatInt(shift, 10) + ccReset);
 
-/*
-					// remove the first _shift_ entries
-					rrdPtr.d.splice(0, shift);
-					// add empty entries to the end _shift_ times
-					var e int64 = 0
-					for (e < shift) {
-						var n = [];
-						for (var ee=0; ee<updateDataPoint.length; ee++) {
-							n.push(null);
+					var temp [][]float64
+					for e := range rrdPtr.D {
+
+						if (int64(e) >= shift) {
+							// append data points more distant than _shift_ to temp
+							temp = append(temp, rrdPtr.D[e])
 						}
-						rrdPtr.d.push(n);
-						e++
+
 					}
 
-					if (dataType == 'COUNTER') {
-						// remove the first _shift_ entries
-						rrdPtr.r.splice(0, shift);
-						// add empty entries to the end _shift_ times
-						for (var e=0; e<shift; e++) {
-							var n = [];
-							for (var ee=0; ee<updateDataPoint.length; ee++) {
-								n.push(null);
+					// copy temp to rrdPtr.D
+					copy(rrdPtr.D, temp)
+
+					if (int64(len(rrdPtr.D)) < totalSteps) {
+						var p int64 = 0
+						// add empty entries to the end
+						for (p < totalSteps - int64(len(rrdPtr.D))) {
+							rrdPtr.D = append(rrdPtr.D, make([]float64, len(updateDataPoint)))
+							p++
+						}
+					}
+
+					if (dataType == "COUNTER") {
+						var temp [][]float64
+						for e := range rrdPtr.R {
+
+							if (int64(e) >= shift) {
+								// append data points more distant than _shift_ to temp
+								temp = append(temp, rrdPtr.R[e])
 							}
-							rrdPtr.r.push([]);
+
+						}
+
+						// copy temp to rrdPtr.R
+						copy(rrdPtr.R, temp)
+
+						if (int64(len(rrdPtr.R)) < totalSteps) {
+							var p int64 = 0
+							// add empty entries to the end
+							for (p < totalSteps - int64(len(rrdPtr.R))) {
+								rrdPtr.R = append(rrdPtr.R, make([]float64, len(updateDataPoint)))
+								p++
+							}
 						}
 					}
 
 					// add intervalSeconds to firstUpdateTs
-					rrdPtr.firstUpdateTs = rrdPtr.firstUpdateTs+(intervalSeconds*1000*shift);
+					*rrdPtr.FirstUpdateTs = *rrdPtr.FirstUpdateTs+(intervalSeconds*1000*shift);
 
-					rrdPtr.currentStep -= shift;
-					fmt.Println(ccRed + "changed currentStep: " + rrdPtr.currentStep + ccReset);
-*/
+					rrdPtr.CurrentStep -= shift;
+					fmt.Println(ccRed + "changed currentStep: " + string(rrdPtr.CurrentStep) + ccReset);
 
 				}
 			}
@@ -232,7 +285,7 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 					// is 3 times the size or larger, meaning if the current update is 33% or smaller it's probably an overflow
 					if (rrdPtr.D[rrdPtr.CurrentStep-1][e] > updateDataPoint[e]*3) {
 
-						// oh no, the counter has overflown so we need to check if this happened near 32 or 64 bit limit
+						// oh no, the counter has overflowed so we need to check if this happened near 32 or 64 bit limit
 						fmt.Println(ccBlue + "overflow" + ccReset)
 
 						// the 32 bit limit is 2,147,483,647 so we should check if we were within 10% of that either way on the last update
@@ -250,22 +303,15 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 						}
 					}
 
-
-					//if (rrdPtr.D[rrdPtr.CurrentStep-1][e] != nil) {
-						// for a counter, we need to divide the difference of this step and the previous step by
-						// the difference in seconds between the updates
-						var rate float64 = updateDataPoint[e]-rrdPtr.D[rrdPtr.CurrentStep-1][e]
-						fmt.Println("calculating the rate for " + strconv.FormatFloat(rate, 'f', -1, 64) + " units over " + strconv.FormatInt(intervalSeconds, 10) + " seconds")
-						rate = rate / float64(intervalSeconds)
-						fmt.Println("inserting data with rate " + strconv.FormatFloat(rate, 'f', -1, 64) + " at time slot " + strconv.FormatInt(rrdPtr.CurrentStep, 10))
-						//rrdPtr.R[rrdPtr.CurrentStep][e] = rate
-						// FIXME this may need to be explicity put at the index rather than just appended
-						rrdPtr.R[rrdPtr.CurrentStep] = append(rrdPtr.R[rrdPtr.CurrentStep], rate)
-					//}
+					// for a counter, we need to divide the difference of this step and the previous step by
+					// the difference in seconds between the updates
+					var rate float64 = updateDataPoint[e]-rrdPtr.D[rrdPtr.CurrentStep-1][e]
+					fmt.Println("calculating the rate for " + strconv.FormatFloat(rate, 'f', -1, 64) + " units over " + strconv.FormatInt(intervalSeconds, 10) + " seconds")
+					rate = rate / float64(intervalSeconds)
+					fmt.Println("inserting data with rate " + strconv.FormatFloat(rate, 'f', -1, 64) + " at time slot " + strconv.FormatInt(rrdPtr.CurrentStep, 10))
+					rrdPtr.R[rrdPtr.CurrentStep] = append(rrdPtr.R[rrdPtr.CurrentStep], rate)
 
 					// insert the data
-					//rrdPtr.D[rrdPtr.CurrentStep][e] = updateDataPoint[e];
-					// FIXME this may need to be explicity put at the index rather than just appended
 					rrdPtr.D[rrdPtr.CurrentStep] = append(rrdPtr.D[rrdPtr.CurrentStep], updateDataPoint[e])
 
 				}
