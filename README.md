@@ -10,7 +10,7 @@ Example
 ======
 
 On a linux system you can run example/example.go which provides a simple example of collecting and displaying
-your enp3s0 interface traffic statistics with a COUNTER and your free/total memory using a GAUGE.
+traffic statistics for an interface
 
 Documentation
 =============
