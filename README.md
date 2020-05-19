@@ -10,7 +10,7 @@ Example
 ======
 
 On a linux system you can run example/example.go which provides a simple example of collecting and displaying
-traffic statistics for an interface
+traffic statistics for an interface using a COUNTER
 
 Documentation
 =============
