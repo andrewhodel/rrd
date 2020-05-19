@@ -2,18 +2,37 @@ go-rrd - a pure Go [r]ound [r]obin [d]atabase library
 
 Simple RRD's.
 
+Installation
+======
+go get github.com/andrewhodel/rrd
+
 Example
 ======
 
-On a linux system you can run example.js which provides a simple example of collecting and displaying
+On a linux system you can run example/example.go which provides a simple example of collecting and displaying
 your enp3s0 interface traffic statistics with a COUNTER and your free/total memory using a GAUGE.
 
 Documentation
 =============
 
-__update(intervalSeconds, totalSteps, dataType, updateTimeStamp, updateDataPoint[], jsonDb, precision=2);__
+__rrd.Rrd__
 
-returns a JSON object representing the RRD database.
+<pre>
+type Rrd struct {
+	D			[][]float64	`json:"d"`
+	R			[][]float64	`json:"r"`
+	CurrentStep		int64		`json:"currentStep"`
+	CurrentAvgCount		int64		`json:"currentAvgCount"`
+	// use a pointer for FirstUpdateTs so we can check for nil
+	FirstUpdateTs		*int64		`json:"firstUpdateTs"`
+	LastUpdateDataPoint	[]float64	`json:"lastUpdateDataPoint"`
+}
+</pre>
+
+
+__rrd.Update(intervalSeconds int64, totalSteps int64, dataType string, updateDataPoint []float64, rrdPtr *Rrd)__
+
+Updates an Rrd struct via a pointer
 
 * intervalSeconds		time between updates
 * totalSteps			total steps of data
@@ -22,41 +41,19 @@ returns a JSON object representing the RRD database.
     GAUGE - things that have no limits, like the value of raw materials
     COUNTER - things that count up, if we get a value that's less than last time it means it reset... stored as a per second rate
 </pre>
-* updateTimeStamp		seconds since unix epoch, not milliseconds
-* updateDataPoint[]		array of data points for the update, you must maintain the same order on following update()'s
-* jsonDb			data from previous updates
-* precision (optional)		number of decimal places to round to for non whole numbers, default 2
+* updateDataPoint[]		array of data points for the update, you must maintain the same order on following Update()'s
+* rrdPtr			pointer to an rrd.Rrd struct
 
 <pre>
 //24 hours with 5 minute interval
-update(5*60, 24*60/5, 'GAUGE', [34,100], jsonObject);
+rrd.Update(5*60, 24*60/5, 'GAUGE', []float64 {34, 100}, &rrdPtr);
 
 //30 days with 1 hour interval
-update(60*60, 30*24/1, 'GAUGE', [34,100], jsonObject);
+rrd.Update(60*60, 30*24, 'GAUGE', []float64 {34, 100}, &rrdPtr);
 
 //365 days with 1 day interval
-update(24*60*60, 365*24/1, 'GAUGE', [34,100], jsonObject);
+rrd.Update(24*60*60, 365*24, 'GAUGE', []float64 {34, 100}, &rrdPtr);
 </pre>
-
-JSON Data Format
-================
-
-The JSON Object returned by update() looks like this:
-
-<pre>
-{ d: [Array],
-  currentStep: 19,
-  firstUpdateTs: 1523555609625,
-  r: [Array] }
-</pre>
-
-d is an array which is the length you specified in totalSteps to update() that contains the data points
-
-firstUpdateTs is a unix epoch timestamp in milliseconds of the first update in the series
-
-r is an array which is the length you specified in totalSteps to update() that contains the rates for the data points
-
-You can calculate the time of each update by adding the multiple of the value of intervalSeconds which you gave to update() for each time slot.
 
 License
 =======
