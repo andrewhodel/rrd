@@ -32,7 +32,7 @@ type Rrd struct {
 
 __rrd.Update(intervalSeconds int64, totalSteps int64, dataType string, updateDataPoint []float64, rrdPtr *Rrd)__
 
-Updates an Rrd struct via a pointer
+Updates an Rrd struct via a pointer.
 
 * intervalSeconds		time between updates
 * totalSteps			total steps of data
@@ -54,6 +54,10 @@ rrd.Update(60*60, 30*24, 'GAUGE', []float64 {34, 100}, &rrdPtr);
 //365 days with 1 day interval
 rrd.Update(24*60*60, 365*24, 'GAUGE', []float64 {34, 100}, &rrdPtr);
 </pre>
+
+__rrd.Dump(rrdPtr *Rrd)__
+
+Print the Rrd to the screen in a readable format.
 
 License
 =======

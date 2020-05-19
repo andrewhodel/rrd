@@ -53,7 +53,7 @@ func main() {
 				if_counter[0] = float64(b_in)
 				if_counter[1] = float64(b_out)
 
-				fmt.Printf("%s: Bytes In: %d\tBytes Out: %d\n", n[0], b_in, b_out)
+				fmt.Printf("%s%s: Bytes In: %d\tBytes Out: %d%s\n\n", "\033[34m", n[0], b_in, b_out, "\033[0m")
 
 				break
 
@@ -62,6 +62,8 @@ func main() {
 		}
 
 		rrd.Update(8, 10, "COUNTER", if_counter, &rrdPtr)
+
+		rrd.Dump(&rrdPtr)
 
 		time.Sleep(5 * time.Second)
 	}
