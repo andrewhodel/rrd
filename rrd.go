@@ -29,13 +29,13 @@ const (
 )
 
 type Rrd struct {
-	D			[][]float64	`json:"d"`
-	R			[][]float64	`json:"r"`
-	CurrentStep		int64		`json:"currentStep"`
-	CurrentAvgCount		int64		`json:"currentAvgCount"`
+	D			[][]float64	`bson:"d" json:"d"`
+	R			[][]float64	`bson:"r" json:"r"`
+	CurrentStep		int64		`bson:"currentStep" json:"currentStep"`
+	CurrentAvgCount		int64		`bson:"currentAvgCount" json:"currentAvgCount"`
 	// use a pointer for FirstUpdateTs so we can check for nil
-	FirstUpdateTs		*int64		`json:"firstUpdateTs"`
-	LastUpdateDataPoint	[]float64	`json:"lastUpdateDataPoint"`
+	FirstUpdateTs		*int64		`bson:"firstUpdateTs" json:"firstUpdateTs"`
+	LastUpdateDataPoint	[]float64	`bson:"lastUpdateDataPoint" json:"lastUpdateDataPoint"`
 }
 
 func Dump(rrdPtr *Rrd) {
