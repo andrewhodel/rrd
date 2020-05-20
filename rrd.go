@@ -278,7 +278,7 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 
 				// insert the data for each data point
 				for e := range updateDataPoint {
-					rrdPtr.D[rrdPtr.CurrentStep][e] = updateDataPoint[e]
+					rrdPtr.D[rrdPtr.CurrentStep] = append(rrdPtr.D[rrdPtr.CurrentStep], updateDataPoint[e])
 				}
 
 				// set the avgCount to 1
