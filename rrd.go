@@ -278,6 +278,7 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 
 				// insert the data for each data point
 				for e := range updateDataPoint {
+
 					rrdPtr.D[rrdPtr.CurrentStep] = append(rrdPtr.D[rrdPtr.CurrentStep], updateDataPoint[e])
 				}
 
@@ -289,35 +290,40 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 				// for each data point
 				for e := range updateDataPoint {
 
-					// we need to check for overflow, overflow happens when a counter resets so we check the last values to see if they were close to the limit if the previous update
-					// is 3 times the size or larger, meaning if the current update is 33% or smaller it's probably an overflow
-					if (rrdPtr.D[rrdPtr.CurrentStep-1][e] > updateDataPoint[e]*3) {
+					// we need this check incase the previous step was null
+					if (len(rrdPtr.D[rrdPtr.CurrentStep-1]) == len(updateDataPoint)) {
 
-						// oh no, the counter has overflowed so we need to check if this happened near 32 or 64 bit limit
-						if debug { fmt.Println(ccBlue + "overflow" + ccReset) }
+						// we need to check for overflow, overflow happens when a counter resets so we check the last values to see if they were close to the limit if the previous update
+						// is 3 times the size or larger, meaning if the current update is 33% or smaller it's probably an overflow
+						if (rrdPtr.D[rrdPtr.CurrentStep-1][e] > updateDataPoint[e]*3) {
 
-						// the 32 bit limit is 2,147,483,647 so we should check if we were within 10% of that either way on the last update
-						if (rrdPtr.D[rrdPtr.CurrentStep][e]<(2147483647*.1)-2147483647) {
-							// this was so close to the limit that we are going to make 32bit adjustments
-							// for this calculation we just need to add the remainder of subtracting the last data point from the 32 bit limit to the updateDataPoint
-							updateDataPoint[e] += 2147483647-rrdPtr.D[rrdPtr.CurrentStep-1][e]
+							// oh no, the counter has overflowed so we need to check if this happened near 32 or 64 bit limit
+							if debug { fmt.Println(ccBlue + "overflow" + ccReset) }
 
-							// the 64 bit limit is 9,223,372,036,854,775,807 so we should check if we were within 1% of that
-						} else if (rrdPtr.D[rrdPtr.CurrentStep][e]<(9223372036854775807*.01)-9223372036854775807) {
-							// this was so close to the limit that we are going to make 64bit adjustments
-							// for this calculation we just need to add the remainder of subtracting the last data point from the 64 bit limit to the updateDataPoint
-							updateDataPoint[e] += 9223372036854775807-rrdPtr.D[rrdPtr.CurrentStep-1][e]
+							// the 32 bit limit is 2,147,483,647 so we should check if we were within 10% of that either way on the last update
+							if (rrdPtr.D[rrdPtr.CurrentStep][e]<(2147483647*.1)-2147483647) {
+								// this was so close to the limit that we are going to make 32bit adjustments
+								// for this calculation we just need to add the remainder of subtracting the last data point from the 32 bit limit to the updateDataPoint
+								updateDataPoint[e] += 2147483647-rrdPtr.D[rrdPtr.CurrentStep-1][e]
 
+								// the 64 bit limit is 9,223,372,036,854,775,807 so we should check if we were within 1% of that
+							} else if (rrdPtr.D[rrdPtr.CurrentStep][e]<(9223372036854775807*.01)-9223372036854775807) {
+								// this was so close to the limit that we are going to make 64bit adjustments
+								// for this calculation we just need to add the remainder of subtracting the last data point from the 64 bit limit to the updateDataPoint
+								updateDataPoint[e] += 9223372036854775807-rrdPtr.D[rrdPtr.CurrentStep-1][e]
+
+							}
 						}
-					}
 
-					// for a counter, we need to divide the difference of this step and the previous step by
-					// the difference in seconds between the updates
-					var rate float64 = updateDataPoint[e]-rrdPtr.D[rrdPtr.CurrentStep-1][e]
-					if debug { fmt.Println("calculating the rate for " + strconv.FormatFloat(rate, 'f', -1, 64) + " units over " + strconv.FormatInt(intervalSeconds, 10) + " seconds") }
-					rate = rate / float64(intervalSeconds)
-					if debug { fmt.Println("inserting data with rate " + strconv.FormatFloat(rate, 'f', -1, 64) + " at time slot " + strconv.FormatInt(rrdPtr.CurrentStep, 10)) }
-					rrdPtr.R[rrdPtr.CurrentStep] = append(rrdPtr.R[rrdPtr.CurrentStep], rate)
+						// for a counter, we need to divide the difference of this step and the previous step by
+						// the difference in seconds between the updates
+						var rate float64 = updateDataPoint[e]-rrdPtr.D[rrdPtr.CurrentStep-1][e]
+						if debug { fmt.Println("calculating the rate for " + strconv.FormatFloat(rate, 'f', -1, 64) + " units over " + strconv.FormatInt(intervalSeconds, 10) + " seconds") }
+						rate = rate / float64(intervalSeconds)
+						if debug { fmt.Println("inserting data with rate " + strconv.FormatFloat(rate, 'f', -1, 64) + " at time slot " + strconv.FormatInt(rrdPtr.CurrentStep, 10)) }
+						rrdPtr.R[rrdPtr.CurrentStep] = append(rrdPtr.R[rrdPtr.CurrentStep], rate)
+
+					}
 
 					// insert the data
 					rrdPtr.D[rrdPtr.CurrentStep] = append(rrdPtr.D[rrdPtr.CurrentStep], updateDataPoint[e])
