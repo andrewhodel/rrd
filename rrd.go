@@ -290,6 +290,10 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 				// for each data point
 				for e := range updateDataPoint {
 
+					if (rrdPtr.CurrentStep == 0) {
+						continue;
+					}
+
 					// need this check incase the previous step was null
 					if (len(rrdPtr.D[rrdPtr.CurrentStep-1]) == len(updateDataPoint)) {
 
@@ -345,6 +349,10 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 
 				// need to do this for each data point
 				for e := range updateDataPoint {
+
+					if (rrdPtr.CurrentStep == 0) {
+						continue;
+					}
 
 					// need this check incase the previous step was null
 					if (len(rrdPtr.D[rrdPtr.CurrentStep-1]) == len(updateDataPoint)) {
