@@ -33,7 +33,7 @@ type Rrd struct {
 	R			[][]float64	`bson:"r" json:"r"`
 	CurrentStep		int64		`bson:"currentStep" json:"currentStep"`
 	CurrentAvgCount		int64		`bson:"currentAvgCount" json:"currentAvgCount"`
-	// use a pointer for FirstUpdateTs so we can check for nil
+	// use a pointer for FirstUpdateTs so can check for nil
 	FirstUpdateTs		*int64		`bson:"firstUpdateTs" json:"firstUpdateTs"`
 	LastUpdateDataPoint	[]float64	`bson:"lastUpdateDataPoint" json:"lastUpdateDataPoint"`
 }
@@ -94,7 +94,7 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 	// totalSteps - total steps of data
 	// dataType - GAUGE or COUNTER
 	//  GAUGE - things that have no limits, like the value of raw materials
-	//  COUNTER - things that count up, if we get a value that's less than last time it means it reset... stored as a per second rate
+	//  COUNTER - things that count up, if get a value that's less than last time it means it reset... stored as a per second rate
 	// updateTimeStamp - unix epoch timestamp of this update
 	// updateDataPoint - data object for this update
 	// rrdPtr - data from previous updates
@@ -139,7 +139,7 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 		}
 	}
 
-	// first we need to see if this is the first update or not
+	// first need to see if this is the first update or not
 	if (rrdPtr.FirstUpdateTs == nil) {
 		// this is the first update
 		if debug { fmt.Println(ccBlue + "### INSERTING FIRST UPDATE ###" + ccReset) }
@@ -290,32 +290,32 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 				// for each data point
 				for e := range updateDataPoint {
 
-					// we need this check incase the previous step was null
+					// need this check incase the previous step was null
 					if (len(rrdPtr.D[rrdPtr.CurrentStep-1]) == len(updateDataPoint)) {
 
-						// we need to check for overflow, overflow happens when a counter resets so we check the last values to see if they were close to the limit if the previous update
+						// need to check for overflow, overflow happens when a counter resets so check the last values to see if they were close to the limit if the previous update
 						// is 3 times the size or larger, meaning if the current update is 33% or smaller it's probably an overflow
 						if (rrdPtr.D[rrdPtr.CurrentStep-1][e] > updateDataPoint[e]*3) {
 
-							// oh no, the counter has overflowed so we need to check if this happened near 32 or 64 bit limit
+							// oh no, the counter has overflowed so need to check if this happened near 32 or 64 bit limit
 							if debug { fmt.Println(ccBlue + "overflow" + ccReset) }
 
-							// the 32 bit limit is 2,147,483,647 so we should check if we were within 10% of that either way on the last update
+							// the 32 bit limit is 2,147,483,647 so should check if were within 10% of that either way on the last update
 							if (rrdPtr.D[rrdPtr.CurrentStep][e]<(2147483647*.1)-2147483647) {
-								// this was so close to the limit that we are going to make 32bit adjustments
-								// for this calculation we just need to add the remainder of subtracting the last data point from the 32 bit limit to the updateDataPoint
+								// this was so close to the limit that are going to make 32bit adjustments
+								// for this calculation just need to add the remainder of subtracting the last data point from the 32 bit limit to the updateDataPoint
 								updateDataPoint[e] += 2147483647-rrdPtr.D[rrdPtr.CurrentStep-1][e]
 
-								// the 64 bit limit is 9,223,372,036,854,775,807 so we should check if we were within 1% of that
+								// the 64 bit limit is 9,223,372,036,854,775,807 so should check if were within 1% of that
 							} else if (rrdPtr.D[rrdPtr.CurrentStep][e]<(9223372036854775807*.01)-9223372036854775807) {
-								// this was so close to the limit that we are going to make 64bit adjustments
-								// for this calculation we just need to add the remainder of subtracting the last data point from the 64 bit limit to the updateDataPoint
+								// this was so close to the limit that are going to make 64bit adjustments
+								// for this calculation just need to add the remainder of subtracting the last data point from the 64 bit limit to the updateDataPoint
 								updateDataPoint[e] += 9223372036854775807-rrdPtr.D[rrdPtr.CurrentStep-1][e]
 
 							}
 						}
 
-						// for a counter, we need to divide the difference of this step and the previous step by
+						// for a counter, need to divide the difference of this step and the previous step by
 						// the difference in seconds between the updates
 						var rate float64 = updateDataPoint[e]-rrdPtr.D[rrdPtr.CurrentStep-1][e]
 						if debug { fmt.Println("calculating the rate for " + strconv.FormatFloat(rate, 'f', -1, 64) + " units over " + strconv.FormatInt(intervalSeconds, 10) + " seconds") }
@@ -343,45 +343,51 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 			if (dataType == "GAUGE") {
 				// this update needs to be averaged with the last
 
-				// we need to do this for each data point
+				// need to do this for each data point
 				for e := range updateDataPoint {
 
-					var avg float64
+					// need this check incase the previous step was null
+					if (len(rrdPtr.D[rrdPtr.CurrentStep-1]) == len(updateDataPoint)) {
 
-					if (rrdPtr.CurrentAvgCount > 1) {
-						// we are averaging with a previous update that was itself an average
-						if debug { fmt.Println("we are averaging with a previous update that was itself an average") }
+						var avg float64
 
-						// that means we have to multiply the avgCount of the previous update by the data point of the previous update
-						if (rrdPtr.CurrentStep == 0) {
-							// this is the first update, we need to average with currentStep not the previous step
-							avg = float64(rrdPtr.CurrentAvgCount) * rrdPtr.D[rrdPtr.CurrentStep][e]
+						if (rrdPtr.CurrentAvgCount > 1) {
+							// are averaging with a previous update that was itself an average
+							if debug { fmt.Println("are averaging with a previous update that was itself an average") }
+
+							// that means have to multiply the avgCount of the previous update by the data point of the previous update
+							if (rrdPtr.CurrentStep == 0) {
+								// this is the first update, need to average with currentStep not the previous step
+								avg = float64(rrdPtr.CurrentAvgCount) * rrdPtr.D[rrdPtr.CurrentStep][e]
+							} else {
+								avg = float64(rrdPtr.CurrentAvgCount) * rrdPtr.D[rrdPtr.CurrentStep-1][e]
+							}
+							// add this updateDataPoint
+							avg += updateDataPoint[e]
+							// increment the avg count
+							rrdPtr.CurrentAvgCount++
+							// then divide by the avgCount
+							avg = avg/float64(rrdPtr.CurrentAvgCount)
+
+							if debug { fmt.Println("updating data point with avg " + strconv.FormatFloat(avg, 'f', -1, 64)) }
+							rrdPtr.D[rrdPtr.CurrentStep][e] = avg
+
 						} else {
-							avg = float64(rrdPtr.CurrentAvgCount) * rrdPtr.D[rrdPtr.CurrentStep-1][e]
+							// need to average the previous update with this one
+							if debug { fmt.Println("averaging with previous update") }
+
+							// need to add the previous update data point to this one then divide by 2 for the average
+							avg = (updateDataPoint[e]+rrdPtr.D[rrdPtr.CurrentStep][e])/2
+							// set the avgCount to 2
+							rrdPtr.CurrentAvgCount = 2
+							// and insert it
+							if debug { fmt.Println("updating data point with avg " + strconv.FormatFloat(avg, 'f', -1, 64)) }
+							rrdPtr.D[rrdPtr.CurrentStep][e] = avg
+
 						}
-						// add this updateDataPoint
-						avg += updateDataPoint[e]
-						// increment the avg count
-						rrdPtr.CurrentAvgCount++
-						// then divide by the avgCount
-						avg = avg/float64(rrdPtr.CurrentAvgCount)
-
-						if debug { fmt.Println("updating data point with avg " + strconv.FormatFloat(avg, 'f', -1, 64)) }
-						rrdPtr.D[rrdPtr.CurrentStep][e] = avg
-
-					} else {
-						// we need to average the previous update with this one
-						if debug { fmt.Println("averaging with previous update") }
-
-						// we need to add the previous update data point to this one then divide by 2 for the average
-						avg = (updateDataPoint[e]+rrdPtr.D[rrdPtr.CurrentStep][e])/2
-						// set the avgCount to 2
-						rrdPtr.CurrentAvgCount = 2
-						// and insert it
-						if debug { fmt.Println("updating data point with avg " + strconv.FormatFloat(avg, 'f', -1, 64)) }
-						rrdPtr.D[rrdPtr.CurrentStep][e] = avg
 
 					}
+
 
 				}
 
