@@ -304,16 +304,17 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 							// oh no, the counter has overflowed so need to check if this happened near 32 or 64 bit limit
 							if debug { fmt.Println(ccBlue + "overflow" + ccReset) }
 
-							// the 32 bit limit is 2,147,483,647 so should check if were within 10% of that either way on the last update
-							if (rrdPtr.D[rrdPtr.CurrentStep][e]<(2147483647*.1)-2147483647) {
-								// this was so close to the limit that are going to make 32bit adjustments
-								// for this calculation just need to add the remainder of subtracting the last data point from the 32 bit limit to the updateDataPoint
+							// the 32 bit limit is 2,147,483,647
+							// check if the last update was within 10% of that
+							if (rrdPtr.D[rrdPtr.CurrentStep-1][e]<(2147483647*.1)-2147483647) {
+								// make 32bit overflow adjustments
+								// for this calculation, add the remainder of subtracting the last data point from the 32 bit limit to the updateDataPoint
 								updateDataPoint[e] += 2147483647-rrdPtr.D[rrdPtr.CurrentStep-1][e]
 
 								// the 64 bit limit is 9,223,372,036,854,775,807 so should check if were within 1% of that
-							} else if (rrdPtr.D[rrdPtr.CurrentStep][e]<(9223372036854775807*.01)-9223372036854775807) {
-								// this was so close to the limit that are going to make 64bit adjustments
-								// for this calculation just need to add the remainder of subtracting the last data point from the 64 bit limit to the updateDataPoint
+							} else if (rrdPtr.D[rrdPtr.CurrentStep-1][e]<(9223372036854775807*.01)-9223372036854775807) {
+								// make 64bit overflow adjustments
+								// for this calculation, add the remainder of subtracting the last data point from the 64 bit limit to the updateDataPoint
 								updateDataPoint[e] += 9223372036854775807-rrdPtr.D[rrdPtr.CurrentStep-1][e]
 
 							}
