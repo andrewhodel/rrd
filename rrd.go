@@ -77,7 +77,7 @@ func Dump(rrdPtr *Rrd) {
 
 func Update(intervalSeconds int64, totalSteps int64, dataType string, updateDataPoint []float64, rrdPtr *Rrd) {
 
-	var debug = false
+	//var debug = true
 
 	if (updateDataPoint == nil) {
 		return
@@ -106,8 +106,6 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 	if debug { fmt.Println("totalSteps: " + strconv.FormatInt(totalSteps, 10)) }
 	if debug { fmt.Println("updateTimeStamp: " + strconv.FormatInt(updateTimeStamp, 10)) }
 	if debug { fmt.Println("updateDataPoint:") }
-
-	if debug { Dump(rrdPtr) }
 
 	for e := range updateDataPoint {
 		if debug { fmt.Printf("\t%f", updateDataPoint[e]) }
@@ -152,9 +150,10 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 
 		// insert the data for each data point
 		for e := range updateDataPoint {
-			if debug { fmt.Println(updateDataPoint[e]) }
+			if debug { fmt.Printf("\t%f", updateDataPoint[e]) }
 			rrdPtr.D[0] = append(rrdPtr.D[0], updateDataPoint[e])
 		}
+		if debug { fmt.Println("") }
 
 		// set the firstUpdateTs by first allocating space, then assigning the value
 		rrdPtr.FirstUpdateTs = new(int64)
@@ -175,7 +174,7 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 		for (c < totalSteps) {
 			timeSteps = append(timeSteps, *rrdPtr.FirstUpdateTs + (intervalSeconds * 1000 * c))
 
-			if (updateTimeStamp >= *rrdPtr.FirstUpdateTs + (intervalSeconds * 1000 * c)) {
+			if (updateTimeStamp > *rrdPtr.FirstUpdateTs + (intervalSeconds * 1000 * c)) {
 				currentTimeSlot = c
 			}
 
@@ -273,12 +272,53 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 
 			if debug { fmt.Println(ccBlue + "inserting data at: " + strconv.FormatInt(rrdPtr.CurrentStep, 10) + ccReset) }
 
+			// if the previous 3 points are missing data, fill them in with this updates data
+			// the problem with this is not that bad, it could increase the update interval by a multiple of 3
+			// but it allows situations like a 5 minute update interval and an update every 5m 1s to continue properly showing data
+			// which is a reasonable expectation in network software
+
+			// the reason you want to update the last 3 data points rather than just one, is because you could have a situation where 10 data points were sent
+			// expecting .1 second intervals yet took 2 seconds for the network to provide them
+			// this could result in ugly data and probably should be set based on expected network latency, realized latency peaks and step interval
+			// especially when using intervals that are milliseconds or nanoseconds apart
+
+			// you could just take this block out if you knew for a fact that data would arrive on time (processing and collection on the same hardware)
+			// of course if you knew that for a fact, you wouldn't have to worry about this block executing
+
+			// I have explained it below (EXPLANATION) for the GAUGE and COUNTER types
+
+			var l int64 = 1;
+			for (l > 0) {
+
+				if (rrdPtr.CurrentStep - l < 0) {
+					// first entry was already filled in
+					break
+				}
+
+				if (len(rrdPtr.D[rrdPtr.CurrentStep - l]) != len(updateDataPoint)) {
+					// this previous set of data points wasn't filled in
+					// use this data point
+					for e := range updateDataPoint {
+						rrdPtr.D[rrdPtr.CurrentStep - l] = append(rrdPtr.D[rrdPtr.CurrentStep - l], updateDataPoint[e])
+					}
+				}
+
+				l--
+			}
+
 			// handle different dataType
+			// this is normal processing for an update, assuming there was no previous data missing
 			if (dataType == "GAUGE") {
+
+				// EXPLANATION
+				// if data is missing in every other update, charts would always look terrible
+				// D D D D D N D N D N D N D
+
+				// best to fill in the values only if <3 were missing, to show real data outages
+				// this works because 5 minute updates would require quite a bit of loss to make a 2 day data point go missing
 
 				// insert the data for each data point
 				for e := range updateDataPoint {
-
 					rrdPtr.D[rrdPtr.CurrentStep] = append(rrdPtr.D[rrdPtr.CurrentStep], updateDataPoint[e])
 				}
 
@@ -287,48 +327,49 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 
 			} else if (dataType == "COUNTER") {
 
+				// EXPLANATION
+				// if data is missing in every other update, rates would never be calculated
+				// D D D D D N D N D N D N D
+				// R R R R R N N N N N N N N
+
+				// with a counter, you can always fill in the data
+
+				// fill in the previous point with the data from this update
+				// not all, only the last 1 because we want to be able to show update outages
+
 				// for each data point
 				for e := range updateDataPoint {
 
-					if (rrdPtr.CurrentStep == 0) {
-						continue;
-					}
+					// need to check for overflow, overflow happens when a counter resets so check the last values to see if they were close to the limit if the previous update
+					// is 3 times the size or larger, meaning if the current update is 33% or smaller it's probably an overflow
+					if (rrdPtr.D[rrdPtr.CurrentStep-1][e] > updateDataPoint[e]*3) {
 
-					// need this check incase the previous step was null
-					if (len(rrdPtr.D[rrdPtr.CurrentStep-1]) == len(updateDataPoint)) {
+						// oh no, the counter has overflowed so need to check if this happened near 32 or 64 bit limit
+						if debug { fmt.Println(ccBlue + "overflow" + ccReset) }
 
-						// need to check for overflow, overflow happens when a counter resets so check the last values to see if they were close to the limit if the previous update
-						// is 3 times the size or larger, meaning if the current update is 33% or smaller it's probably an overflow
-						if (rrdPtr.D[rrdPtr.CurrentStep-1][e] > updateDataPoint[e]*3) {
+						// the 32 bit limit is 2,147,483,647
+						// check if the last update was within 10% of that
+						if (rrdPtr.D[rrdPtr.CurrentStep-1][e]<(2147483647*.1)-2147483647) {
+							// make 32bit overflow adjustments
+							// for this calculation, add the remainder of subtracting the last data point from the 32 bit limit to the updateDataPoint
+							updateDataPoint[e] += 2147483647-rrdPtr.D[rrdPtr.CurrentStep-1][e]
 
-							// oh no, the counter has overflowed so need to check if this happened near 32 or 64 bit limit
-							if debug { fmt.Println(ccBlue + "overflow" + ccReset) }
+							// the 64 bit limit is 9,223,372,036,854,775,807 so should check if were within 1% of that
+						} else if (rrdPtr.D[rrdPtr.CurrentStep-1][e]<(9223372036854775807*.01)-9223372036854775807) {
+							// make 64bit overflow adjustments
+							// for this calculation, add the remainder of subtracting the last data point from the 64 bit limit to the updateDataPoint
+							updateDataPoint[e] += 9223372036854775807-rrdPtr.D[rrdPtr.CurrentStep-1][e]
 
-							// the 32 bit limit is 2,147,483,647
-							// check if the last update was within 10% of that
-							if (rrdPtr.D[rrdPtr.CurrentStep-1][e]<(2147483647*.1)-2147483647) {
-								// make 32bit overflow adjustments
-								// for this calculation, add the remainder of subtracting the last data point from the 32 bit limit to the updateDataPoint
-								updateDataPoint[e] += 2147483647-rrdPtr.D[rrdPtr.CurrentStep-1][e]
-
-								// the 64 bit limit is 9,223,372,036,854,775,807 so should check if were within 1% of that
-							} else if (rrdPtr.D[rrdPtr.CurrentStep-1][e]<(9223372036854775807*.01)-9223372036854775807) {
-								// make 64bit overflow adjustments
-								// for this calculation, add the remainder of subtracting the last data point from the 64 bit limit to the updateDataPoint
-								updateDataPoint[e] += 9223372036854775807-rrdPtr.D[rrdPtr.CurrentStep-1][e]
-
-							}
 						}
-
-						// for a counter, need to divide the difference of this step and the previous step by
-						// the difference in seconds between the updates
-						var rate float64 = updateDataPoint[e]-rrdPtr.D[rrdPtr.CurrentStep-1][e]
-						if debug { fmt.Println("calculating the rate for " + strconv.FormatFloat(rate, 'f', -1, 64) + " units over " + strconv.FormatInt(intervalSeconds, 10) + " seconds") }
-						rate = rate / float64(intervalSeconds)
-						if debug { fmt.Println("inserting data with rate " + strconv.FormatFloat(rate, 'f', -1, 64) + " at time slot " + strconv.FormatInt(rrdPtr.CurrentStep, 10)) }
-						rrdPtr.R[rrdPtr.CurrentStep] = append(rrdPtr.R[rrdPtr.CurrentStep], rate)
-
 					}
+
+					// for a counter, need to divide the difference of this step and the previous step by
+					// the difference in seconds between the updates
+					var rate float64 = updateDataPoint[e]-rrdPtr.D[rrdPtr.CurrentStep-1][e]
+					if debug { fmt.Println("calculating the rate for " + strconv.FormatFloat(rate, 'f', -1, 64) + " units over " + strconv.FormatInt(intervalSeconds, 10) + " seconds") }
+					rate = rate / float64(intervalSeconds)
+					if debug { fmt.Println("inserting data with rate " + strconv.FormatFloat(rate, 'f', -1, 64) + " at time slot " + strconv.FormatInt(rrdPtr.CurrentStep, 10)) }
+					rrdPtr.R[rrdPtr.CurrentStep] = append(rrdPtr.R[rrdPtr.CurrentStep], rate)
 
 					// insert the data
 					rrdPtr.D[rrdPtr.CurrentStep] = append(rrdPtr.D[rrdPtr.CurrentStep], updateDataPoint[e])
@@ -346,63 +387,36 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 
 			// handle different dataType
 			if (dataType == "GAUGE") {
-				// this update needs to be averaged with the last
+				// this update needs to be averaged with the data in this step
 
 				// need to do this for each data point
 				for e := range updateDataPoint {
 
-					if (rrdPtr.CurrentStep == 0) {
-						continue;
-					}
+					var avg float64
 
-					// need this check incase the previous step was null
-					if (len(rrdPtr.D[rrdPtr.CurrentStep-1]) == len(updateDataPoint)) {
+					// average with a value in the same step
+					if debug { fmt.Println("average with a value in the same step") }
 
-						var avg float64
+					// multiply the avgCount with the existing value
+					avg = float64(rrdPtr.CurrentAvgCount) * rrdPtr.D[rrdPtr.CurrentStep][e]
 
-						if (rrdPtr.CurrentAvgCount > 1) {
-							// are averaging with a previous update that was itself an average
-							if debug { fmt.Println("are averaging with a previous update that was itself an average") }
+					// add this updateDataPoint
+					avg += updateDataPoint[e]
 
-							// that means have to multiply the avgCount of the previous update by the data point of the previous update
-							if (rrdPtr.CurrentStep == 0) {
-								// this is the first update, need to average with currentStep not the previous step
-								avg = float64(rrdPtr.CurrentAvgCount) * rrdPtr.D[rrdPtr.CurrentStep][e]
-							} else {
-								avg = float64(rrdPtr.CurrentAvgCount) * rrdPtr.D[rrdPtr.CurrentStep-1][e]
-							}
-							// add this updateDataPoint
-							avg += updateDataPoint[e]
-							// increment the avg count
-							rrdPtr.CurrentAvgCount++
-							// then divide by the avgCount
-							avg = avg/float64(rrdPtr.CurrentAvgCount)
+					// increment the avg count
+					rrdPtr.CurrentAvgCount++
 
-							if debug { fmt.Println("updating data point with avg " + strconv.FormatFloat(avg, 'f', -1, 64)) }
-							rrdPtr.D[rrdPtr.CurrentStep][e] = avg
+					// then divide by the avgCount to get the new average
+					avg = avg/float64(rrdPtr.CurrentAvgCount)
 
-						} else {
-							// need to average the previous update with this one
-							if debug { fmt.Println("averaging with previous update") }
-
-							// need to add the previous update data point to this one then divide by 2 for the average
-							avg = (updateDataPoint[e]+rrdPtr.D[rrdPtr.CurrentStep][e])/2
-							// set the avgCount to 2
-							rrdPtr.CurrentAvgCount = 2
-							// and insert it
-							if debug { fmt.Println("updating data point with avg " + strconv.FormatFloat(avg, 'f', -1, 64)) }
-							rrdPtr.D[rrdPtr.CurrentStep][e] = avg
-
-						}
-
-					}
+					if debug { fmt.Println("updating data point with avg " + strconv.FormatFloat(avg, 'f', -1, 64)) }
+					rrdPtr.D[rrdPtr.CurrentStep][e] = avg
 
 
 				}
 
 			} else if (dataType == "COUNTER") {
-				// increase the counter on the last update to this one for each data point
-				// this actually means to modify, not increase because it would be an increased value
+				// set the counter on this step to that of this update
 				for e := range updateDataPoint {
 					rrdPtr.D[rrdPtr.CurrentStep][e] = updateDataPoint[e]
 				}
@@ -410,6 +424,15 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 			} else {
 				if debug { fmt.Println("unsupported dataType " + dataType) }
 
+			}
+		}
+
+		if debug { fmt.Printf("data: %+v\n", rrdPtr.D) }
+
+		if (debug) {
+			if (len(rrdPtr.D[rrdPtr.CurrentStep]) != len(updateDataPoint)) {
+				// something is wrong
+				fmt.Printf("\nDATA LENGTH IS OFF\n\a\a")
 			}
 		}
 
