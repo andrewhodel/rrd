@@ -259,7 +259,7 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 					*rrdPtr.FirstUpdateTs = *rrdPtr.FirstUpdateTs+(intervalSeconds*1000*shift)
 
 					rrdPtr.CurrentStep -= shift
-					if debug { fmt.Println(ccRed + "changed currentStep: " + string(rrdPtr.CurrentStep) + ccReset) }
+					if debug { fmt.Printf("%schanged currentStep: %i%s\n", ccRed, rrdPtr.CurrentStep, ccReset) }
 
 				}
 			}
@@ -305,6 +305,12 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 
 				l--
 			}
+
+			// remove any data in this step
+			// otherwise append will continue adding data to each step
+			// there would have been data in a step after a shift
+			rrdPtr.D[rrdPtr.CurrentStep] = nil
+			rrdPtr.R[rrdPtr.CurrentStep] = nil
 
 			// handle different dataType
 			// this is normal processing for an update, assuming there was no previous data missing
