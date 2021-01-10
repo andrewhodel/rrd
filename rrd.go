@@ -310,7 +310,9 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 			// otherwise append will continue adding data to each step
 			// there would have been data in a step after a shift
 			rrdPtr.D[rrdPtr.CurrentStep] = nil
-			rrdPtr.R[rrdPtr.CurrentStep] = nil
+			if (dataType == "COUNTER") {
+				rrdPtr.R[rrdPtr.CurrentStep] = nil
+			}
 
 			// handle different dataType
 			// this is normal processing for an update, assuming there was no previous data missing
