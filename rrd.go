@@ -185,7 +185,14 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 			//}
 
 			// this will use the next time slot if it is received 5% of time through it
-			// this seems like the most reasonble solution with network latency being a factor
+			// this seems like the most reasonable solution with network latency being a factor
+			// it could be 50% or 70% really, but it seems that we should be discarding data that is that behind
+			// especially considering that the delay could be processing   -
+			//								--
+			//								--
+			//								---
+			//								---
+			//								---
 			if (updateTimeStamp > *rrdPtr.FirstUpdateTs + (intervalSeconds * 1000 * c) + int64(float64(intervalSeconds * 1000) * .05)) {
 				currentTimeSlot = c
 			}
