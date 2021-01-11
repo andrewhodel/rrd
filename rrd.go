@@ -1,6 +1,6 @@
 /*
 
-Copyright 2020 Andrew Hodel
+Copyright 2021 Andrew Hodel
 	andrewhodel@gmail.com
 
 LICENSE MIT

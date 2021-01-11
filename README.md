@@ -66,7 +66,7 @@ Print the Rrd to the screen in a readable format.
 License
 =======
 
-Copyright 2020 Andrew Hodel
+Copyright 2021 Andrew Hodel
 	andrewhodel@gmail.com
 
 LICENSE MIT
