@@ -184,7 +184,8 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 			//	currentTimeSlot = c
 			//}
 
-			// this will use the next time slot if it is received 5% of time through it
+			// this will use the time slot if it is received (pct) of time through the next one or in this one
+			var pct float64 = .20
 			// this seems like the most reasonable solution with network latency being a factor
 			// it could be 50% or 70% really, but it seems that we should be discarding data that is that behind
 			// especially considering that the delay could be processing   -
@@ -193,7 +194,7 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 			//								---
 			//								---
 			//								---
-			if (updateTimeStamp > *rrdPtr.FirstUpdateTs + (intervalSeconds * 1000 * c) + int64(float64(intervalSeconds * 1000) * .05)) {
+			if (updateTimeStamp > *rrdPtr.FirstUpdateTs + (intervalSeconds * 1000 * c) + int64(float64(intervalSeconds * 1000) * pct)) {
 				currentTimeSlot = c
 			}
 
@@ -202,7 +203,7 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 
 		if debug { fmt.Println("currentTimeSlot: " + strconv.FormatInt(currentTimeSlot, 10)) }
 
-		// now check if this update is in the current time slot
+		// now check if this update is in the current time slot or a newer one
 		if (updateTimeStamp > timeSteps[rrdPtr.CurrentStep+1]) {
 			// this update is in a completely new time slot
 			if debug { fmt.Println(ccBlue + "##### NEW STEP ##### this update is in a new step" + ccReset) }
@@ -296,7 +297,7 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 			// but it allows situations like a 5 ms update interval and an update every 6ms to continue properly showing data for counters
 			// which is a reasonable expectation in network software
 
-			// the time slot calculation already has a 5% of intervalSeconds buffer which resolves most of this
+			// the time slot calculation already has a buffer (some % after intervalSeconds into the next step) which resolves most of this
 
 			// the reason you want to update the last 3 data points rather than just one, is because you could have a situation where 10 data points were sent
 			// expecting .1 second intervals yet took 2 seconds for the network to provide them
