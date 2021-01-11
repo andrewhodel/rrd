@@ -174,7 +174,19 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 		for (c < totalSteps) {
 			timeSteps = append(timeSteps, *rrdPtr.FirstUpdateTs + (intervalSeconds * 1000 * c))
 
-			if (updateTimeStamp > *rrdPtr.FirstUpdateTs + (intervalSeconds * 1000 * c)) {
+			// this will use the next time slot if it is only 1ms after the start of it
+			//if (updateTimeStamp > *rrdPtr.FirstUpdateTs + (intervalSeconds * 1000 * c)) {
+			//	currentTimeSlot = c
+			//}
+
+			// this will use the next time slot if it is received more than 5 seconds into it
+			//if (updateTimeStamp > *rrdPtr.FirstUpdateTs + (intervalSeconds * 1000 * c) + 5000) {
+			//	currentTimeSlot = c
+			//}
+
+			// this will use the next time slot if it is received 5% of time through it
+			// this seems like the most reasonble solution with network latency being a factor
+			if (updateTimeStamp > *rrdPtr.FirstUpdateTs + (intervalSeconds * 1000 * c) + int64(float64(intervalSeconds * 1000) * .05)) {
 				currentTimeSlot = c
 			}
 
@@ -274,8 +286,10 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 
 			// if the previous 3 points are missing data, fill them in with this updates data
 			// the problem with this is not that bad, it could increase the update interval by a multiple of 3
-			// but it allows situations like a 5 minute update interval and an update every 5m 1s to continue properly showing data
+			// but it allows situations like a 5 ms update interval and an update every 6ms to continue properly showing data for counters
 			// which is a reasonable expectation in network software
+
+			// the time slot calculation already has a 5% of intervalSeconds buffer which resolves most of this
 
 			// the reason you want to update the last 3 data points rather than just one, is because you could have a situation where 10 data points were sent
 			// expecting .1 second intervals yet took 2 seconds for the network to provide them
@@ -287,7 +301,7 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 
 			// I have explained it below (EXPLANATION) for the GAUGE and COUNTER types
 
-			var l int64 = 1;
+			var l int64 = 1
 			for (l > 0) {
 
 				if (rrdPtr.CurrentStep - l < 0) {
