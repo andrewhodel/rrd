@@ -194,6 +194,9 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 			//								---
 			//								---
 			//								---
+			// the explanation is that updates can be sent without knowledge of time on the far side, as if you were receiving data from an unknown source or distant planet
+			// it needs to be that way because many devices with a tcp/ip stack don't have a ntp client
+			// or NTP isn't accurate enough at a high resolution
 			if (updateTimeStamp > *rrdPtr.FirstUpdateTs + (intervalSeconds * 1000 * c) + int64(float64(intervalSeconds * 1000) * pct)) {
 				currentTimeSlot = c
 			}
@@ -290,6 +293,12 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 				rrdPtr.CurrentStep--
 			}
 
+			if (rrdPtr.CurrentStep == 0) {
+				// there was a buffer calculation that was too greedy and put a new update in the first step
+				// which is impossible for a new step, so make the current step 1
+				rrdPtr.CurrentStep = 1
+			}
+
 			if debug { fmt.Println(ccBlue + "inserting data at: " + strconv.FormatInt(rrdPtr.CurrentStep, 10) + ccReset) }
 
 			// if the previous 3 points are missing data, fill them in with this updates data
@@ -323,6 +332,8 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 					for e := range updateDataPoint {
 						rrdPtr.D[rrdPtr.CurrentStep - l] = append(rrdPtr.D[rrdPtr.CurrentStep - l], updateDataPoint[e])
 					}
+					if debug { fmt.Printf("PREVIOUS DATA STEP WAS MISSING\n\a\a") }
+
 				}
 
 				l--
