@@ -301,14 +301,14 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 
 			if debug { fmt.Println(ccBlue + "inserting data at: " + strconv.FormatInt(rrdPtr.CurrentStep, 10) + ccReset) }
 
-			// if the previous 3 points are missing data, fill them in with this updates data
-			// the problem with this is not that bad, it could increase the update interval by a multiple of 3
+			// if the previous {total_missing_to_fill} points are missing data, fill them in with this updates data
+			// the problem with this is not that bad, it could increase the update interval by a multiple of {total_missing_to_fill}
 			// but it allows situations like a 5 ms update interval and an update every 6ms to continue properly showing data for counters
 			// which is a reasonable expectation in network software
 
 			// the time slot calculation already has a buffer (some % after intervalSeconds into the next step) which resolves most of this
 
-			// the reason you want to update the last 3 data points rather than just one, is because you could have a situation where 10 data points were sent
+			// the reason you want to update the last {total_missing_to_fill} data points rather than just one, is because you could have a situation where 10 data points were sent
 			// expecting .1 second intervals yet took 2 seconds for the network to provide them
 			// this could result in ugly data and probably should be set based on expected network latency, realized latency peaks and step interval
 			// especially when using intervals that are milliseconds or nanoseconds apart
@@ -318,7 +318,8 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 
 			// I have explained it below (EXPLANATION) for the GAUGE and COUNTER types
 
-			var l int64 = 1
+			var total_missing_to_fill int64 = 1
+			var l int64 = total_missing_to_fill
 			for (l > 0) {
 
 				if (rrdPtr.CurrentStep - l < 0) {
@@ -415,6 +416,27 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 					// insert the data
 					rrdPtr.D[rrdPtr.CurrentStep] = append(rrdPtr.D[rrdPtr.CurrentStep], updateDataPoint[e])
 
+				}
+
+				var l int64 = total_missing_to_fill
+				for (l > 0) {
+
+					if (rrdPtr.CurrentStep - l < 0) {
+						// first entry was already filled in
+						break
+					}
+
+					if (len(rrdPtr.R[rrdPtr.CurrentStep - l]) != len(updateDataPoint)) {
+						// this previous set of data points wasn't filled in
+						// use the rate that was calculated
+						for e := range updateDataPoint {
+							rrdPtr.R[rrdPtr.CurrentStep - l] = append(rrdPtr.R[rrdPtr.CurrentStep - l], rrdPtr.R[rrdPtr.CurrentStep][e])
+						}
+						if debug { fmt.Printf("PREVIOUS RATE DATA STEP WAS MISSING\n\a\a") }
+
+					}
+
+					l--
 				}
 
 			} else {
