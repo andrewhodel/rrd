@@ -19,6 +19,8 @@ import (
 	"time"
 	"fmt"
 	"strconv"
+	"math"
+	"math/big"
 )
 
 const (
@@ -36,6 +38,10 @@ type Rrd struct {
 	// use a pointer for FirstUpdateTs so can check for nil
 	FirstUpdateTs		*int64		`bson:"firstUpdateTs" json:"firstUpdateTs"`
 	LastUpdateDataPoint	[]float64	`bson:"lastUpdateDataPoint" json:"lastUpdateDataPoint"`
+	// Overflow fixes the problem of many overflows sent in a single step as math/big is used to calculate the rate from multiple float64 values
+	// as long as an interface isn't faster than 1.7976931348623157e+308 bits per second the rate will never be incorrect
+	// D needs to be changed to a uint64 data type to support 64 bit counters which means rrd.Update() needs to accept and store multiple data types
+	Overflow		[][]float64	`bson:"overflow" json:"overflow"`
 }
 
 func Dump(rrdPtr *Rrd) {
@@ -77,7 +83,7 @@ func Dump(rrdPtr *Rrd) {
 
 func Update(intervalSeconds int64, totalSteps int64, dataType string, updateDataPoint []float64, rrdPtr *Rrd) {
 
-	var debug = false
+	var debug = true
 
 	if (updateDataPoint == nil) {
 		return
@@ -120,19 +126,9 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 		// then it is an entirely new chart
 		if (updateTimeStamp >= *rrdPtr.FirstUpdateTs+(totalSteps*2*intervalSeconds*1000)) {
 			// set firstUpdateTs to nil so this will be considered the first update
+			// which resets all the data
 			if debug { fmt.Println(ccBlue + "### THIS UPDATE IS SO MUCH NEWER THAN THE EXISTING DATA THAT IT REPLACES IT ###" + ccReset) }
 			rrdPtr.FirstUpdateTs = nil
-
-			// reset all the data
-			if (dataType == "COUNTER") {
-				// counter types need a rate calculation
-				rrdPtr.R = nil
-				rrdPtr.R = make([][]float64, totalSteps)
-			}
-
-			rrdPtr.D = nil
-			rrdPtr.D = make([][]float64, totalSteps)
-			rrdPtr.CurrentStep = 0
 
 		}
 	}
@@ -146,6 +142,8 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 		rrdPtr.D = make([][]float64, totalSteps)
 		if (dataType == "COUNTER") {
 			rrdPtr.R = make([][]float64, totalSteps)
+			// create the Overflow tracker
+			rrdPtr.Overflow = make([][]float64, len(updateDataPoint))
 		}
 
 		// insert the data for each data point
@@ -159,6 +157,9 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 		rrdPtr.FirstUpdateTs = new(int64)
 		rrdPtr.FirstUpdateTs = &updateTimeStamp
 
+		// set the CurrentStep to 0
+		rrdPtr.CurrentStep = 0
+
 	} else {
 
 		// this is not the first update
@@ -166,6 +167,9 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 
 		// this timestamp
 		if debug { fmt.Println("updateTimeStamp: " + strconv.FormatInt(updateTimeStamp, 10)) }
+
+		// this overflow
+		if debug { fmt.Printf("overflow: %v\n", rrdPtr.Overflow) }
 
 		// get the time steps for each position, based on firstUpdateTs
 		var timeSteps []int64
@@ -382,34 +386,89 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 				// for each data point
 				for e := range updateDataPoint {
 
-					// need to check for overflow, overflow happens when a counter resets so check the last values to see if they were close to the limit if the previous update
-					// is 3 times the size or larger, meaning if the current update is 33% or smaller it's probably an overflow
-					if (rrdPtr.D[rrdPtr.CurrentStep-1][e] > updateDataPoint[e]*3) {
+					big_d := new(big.Float).SetFloat64(float64(updateDataPoint[e]))
 
-						// oh no, the counter has overflowed so need to check if this happened near 32 or 64 bit limit
-						if debug { fmt.Println(ccBlue + "overflow" + ccReset) }
+					// add all the previous overflows to prev
+					big_prev := new(big.Float).SetFloat64(float64(0.0))
+					for n := range rrdPtr.Overflow[e] {
+						big_prev.Add(big_prev, new(big.Float).SetFloat64(rrdPtr.Overflow[e][n]))
+					}
 
-						// the 32 bit limit is 2,147,483,647
-						// check if the last update was within 10% of that
-						if (rrdPtr.D[rrdPtr.CurrentStep-1][e]<(2147483647*.1)-2147483647) {
+					// reset Overflow
+					rrdPtr.Overflow[e] = nil
+
+					if (rrdPtr.D[rrdPtr.CurrentStep-1][e] > updateDataPoint[e]) {
+
+						// counter overflow, check if this happened near 32 or 64 bit limit
+						if debug { fmt.Println(ccBlue + "new step overflow" + ccReset) }
+
+						// the 32 bit limit for an unsigned integer is 4,294,967,295
+						// check if the last step was that or less
+						if (rrdPtr.D[rrdPtr.CurrentStep-1][e] <= math.MaxUint32) {
 							// make 32bit overflow adjustments
-							// for this calculation, add the remainder of subtracting the last data point from the 32 bit limit to the updateDataPoint
-							updateDataPoint[e] += 2147483647-rrdPtr.D[rrdPtr.CurrentStep-1][e]
+							if debug { fmt.Println(ccBlue + "32 bit overflow" + ccReset) }
 
-							// the 64 bit limit is 9,223,372,036,854,775,807 so should check if were within 1% of that
-						} else if (rrdPtr.D[rrdPtr.CurrentStep-1][e]<(9223372036854775807*.01)-9223372036854775807) {
+							// add the remainder of subtracting the last data point from the limit to the updateDataPoint
+							big_d.Add(big_d, new(big.Float).SetFloat64(float64(2147483647) - float64(rrdPtr.D[rrdPtr.CurrentStep-1][e])))
+
+						} else {
+							// the 64 bit limit is 18,446,744,073,709,551,615
 							// make 64bit overflow adjustments
-							// for this calculation, add the remainder of subtracting the last data point from the 64 bit limit to the updateDataPoint
-							updateDataPoint[e] += 9223372036854775807-rrdPtr.D[rrdPtr.CurrentStep-1][e]
+							if debug { fmt.Println(ccBlue + "64 bit overflow" + ccReset) }
+
+							// add the remainder of subtracting the last data point from the limit to the updateDataPoint
+							big_d.Add(big_d, new(big.Float).SetFloat64(float64(math.MaxUint64) - float64(rrdPtr.D[rrdPtr.CurrentStep-1][e])))
 
 						}
+
+						// store the overflow, if big_d > the float64 limit then store multiple float64 values
+						if (big_d.Cmp(new(big.Float).SetFloat64(float64(math.MaxUint64))) == 1) {
+							// divide big_d by the limit
+							v := new(big.Float).Quo(big_d, new(big.Float).SetFloat64(float64(math.MaxUint64)))
+
+							f, accuracy := v.Float64()
+							_ = accuracy
+
+							// get the floor value of f
+							floor := math.Floor(f)
+
+							// get the remainder
+							rem := f - floor
+
+							// store floor values of the limit
+							var vc int = 0
+							for (vc < int(floor)) {
+								rrdPtr.Overflow[e] = append(rrdPtr.Overflow[e], float64(math.MaxUint64))
+								vc++
+							}
+
+							// store 1 value of the limit * the remainder
+							rrdPtr.Overflow[e] = append(rrdPtr.Overflow[e], float64(math.MaxUint64 * rem))
+
+						} else {
+							// store the overflow
+							v, accuracy := big_d.Float64()
+							_ = accuracy
+							rrdPtr.Overflow[e] = append(rrdPtr.Overflow[e], float64(v))
+						}
+
 					}
 
 					// for a counter, need to divide the difference of this step and the previous step by
 					// the difference in seconds between the updates
-					var rate float64 = updateDataPoint[e]-rrdPtr.D[rrdPtr.CurrentStep-1][e]
-					if debug { fmt.Println("calculating the rate for " + strconv.FormatFloat(rate, 'f', -1, 64) + " units over " + strconv.FormatInt(intervalSeconds, 10) + " seconds") }
-					rate = rate / float64(intervalSeconds)
+
+					// add the last step and big_prev to get the "last step"
+					big_prev.Add(big_prev, new(big.Float).SetFloat64(rrdPtr.D[rrdPtr.CurrentStep-1][e]))
+					// subtract big_prev from big_d to get the units between
+					big_d.Add(big_d, big_prev.Neg(big_prev))
+
+					diff, accuracy := big_d.Float64()
+					_ = accuracy
+
+					diff = math.Abs(diff)
+
+					if debug { fmt.Println("calculating the rate for " + strconv.FormatFloat(diff, 'f', -1, 64) + " units over " + strconv.FormatInt(intervalSeconds, 10) + " seconds") }
+					var rate float64 = diff / float64(intervalSeconds)
 					if debug { fmt.Println("inserting data with rate " + strconv.FormatFloat(rate, 'f', -1, 64) + " at time slot " + strconv.FormatInt(rrdPtr.CurrentStep, 10)) }
 					rrdPtr.R[rrdPtr.CurrentStep] = append(rrdPtr.R[rrdPtr.CurrentStep], rate)
 
@@ -481,6 +540,68 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 			} else if (dataType == "COUNTER") {
 				// set the counter on this step to that of this update
 				for e := range updateDataPoint {
+
+					big_d := new(big.Float).SetFloat64(float64(updateDataPoint[e]))
+
+					// check for counter overflow in the same step
+
+					if (rrdPtr.D[rrdPtr.CurrentStep][e] > updateDataPoint[e]) {
+
+						// counter overflow, check if this happened near 32 or 64 bit limit
+						if debug { fmt.Println(ccBlue + "same step overflow" + ccReset) }
+
+						// the 32 bit limit for an unsigned integer is 4,294,967,295
+						if (rrdPtr.D[rrdPtr.CurrentStep][e] <= math.MaxUint32) {
+							// make 32bit overflow adjustments
+							if debug { fmt.Println(ccBlue + "32 bit overflow" + ccReset) }
+
+							// add the remainder of subtracting this data point from the limit to the updateDataPoint
+							big_d.Add(big_d, new(big.Float).SetFloat64(float64(2147483647) - float64(rrdPtr.D[rrdPtr.CurrentStep][e])))
+
+						} else {
+							// the 64 bit limit is 18,446,744,073,709,551,615
+							// make 64bit overflow adjustments
+							if debug { fmt.Println(ccBlue + "64 bit overflow" + ccReset) }
+
+							// add the remainder of subtracting this data point from the limit to the updateDataPoint
+							big_d.Add(big_d, new(big.Float).SetFloat64(float64(math.MaxUint64) - float64(rrdPtr.D[rrdPtr.CurrentStep][e])))
+
+						}
+
+						// store the overflow, if big_d > the float64 limit then store multiple float64 values
+						if (big_d.Cmp(new(big.Float).SetFloat64(float64(math.MaxUint64))) == 1) {
+							// divide big_d by the limit
+							v := new(big.Float).Quo(big_d, new(big.Float).SetFloat64(float64(math.MaxUint64)))
+
+							f, accuracy := v.Float64()
+							_ = accuracy
+
+							// get the floor value of f
+							floor := math.Floor(f)
+
+							// get the remainder
+							rem := f - floor
+
+							// store floor values of the limit
+							var vc int = 0
+							for (vc < int(floor)) {
+								rrdPtr.Overflow[e] = append(rrdPtr.Overflow[e], float64(math.MaxUint64))
+								vc++
+							}
+
+							// store 1 value of the limit * the remainder
+							rrdPtr.Overflow[e] = append(rrdPtr.Overflow[e], float64(math.MaxUint64 * rem))
+
+						} else {
+							// store the overflow
+							v, accuracy := big_d.Float64()
+							_ = accuracy
+							rrdPtr.Overflow[e] = append(rrdPtr.Overflow[e], float64(v))
+						}
+
+					}
+
+					// store the data point
 					rrdPtr.D[rrdPtr.CurrentStep][e] = updateDataPoint[e]
 				}
 
@@ -491,13 +612,6 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 		}
 
 		if debug { fmt.Printf("data: %+v\n", rrdPtr.D) }
-
-		if (debug) {
-			if (len(rrdPtr.D[rrdPtr.CurrentStep]) != len(updateDataPoint)) {
-				// something is wrong
-				fmt.Printf("\nDATA LENGTH IS OFF\n\a\a")
-			}
-		}
 
 	}
 
