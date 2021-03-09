@@ -83,7 +83,7 @@ func Dump(rrdPtr *Rrd) {
 
 func Update(intervalSeconds int64, totalSteps int64, dataType string, updateDataPoint []float64, rrdPtr *Rrd) {
 
-	var debug = true
+	var debug = false
 
 	if (updateDataPoint == nil) {
 		return
