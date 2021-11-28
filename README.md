@@ -63,6 +63,11 @@ __rrd.Dump(rrdPtr *Rrd)__
 
 Print the Rrd to the screen in a readable format.
 
+Patterns
+========
+
+The pattern work is in patterns.go, you can already get every unique pattern in a data set and that should make it easy.
+
 License
 =======
 
