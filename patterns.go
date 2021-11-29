@@ -179,14 +179,64 @@ func get_unique_patterns(d []float64, repeatable_patterns_only bool) ([][]float6
 
 }
 
+func count_patterns_in_set(patterns [][]float64, set []float64) ([]uint64) {
+
+	// return the count of how many times each item in patterns[] exists in set
+	var matches = make([]uint64, 0)
+
+	for c := range patterns {
+
+		var inner_matches uint64 = 0
+
+		var pattern = patterns[c]
+
+		for n := 0; n < len(set); n++ {
+
+			if (len(pattern)+n > len(set)) {
+				// end of set reached for pattern
+				continue
+			}
+
+			//fmt.Printf("testing %+v against %+v\n", pattern, set[n:len(set)])
+
+			var match = true;
+			for l := range pattern {
+
+				if (pattern[l] != set[l+n]) {
+					// not a match
+					match = false
+					break
+				}
+
+			}
+
+			if (match) {
+				inner_matches += 1
+			}
+
+		}
+
+		//fmt.Printf("testing pattern %+v with %d occurances.\n", pattern, inner_matches)
+
+		matches = append(matches, inner_matches)
+
+	}
+
+	return matches
+
+}
+
 func main() {
 
-	//var d = []float64 {0,1,0,0,1,0,1,0,1,0}
-	var d = []float64 {1,2,3,4,5,6,7,8,9,10}
+	var d = []float64 {0,1,0,0,1,0,1,0,1,0}
+	//var d = []float64 {1,2,3,4,5,6,7,8,9,10}
 
 	//var patterns = get_unique_patterns(d, true)
 	var patterns = get_unique_patterns(d, false)
-	fmt.Printf("patterns: %+v\n", patterns)
+	fmt.Printf("patterns (%d): %+v\n", len(patterns), patterns)
+
+	var counts = count_patterns_in_set(patterns, d)
+	fmt.Printf("counts (%d): %+v\n", len(counts), counts)
 
 	// from here you can practically do any pattern matching with other data
 
