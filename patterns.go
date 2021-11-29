@@ -133,6 +133,7 @@ func get_unique_patterns(d []float64, repeatable_patterns_only bool) ([][]float6
 		if (len(max_len_patterns) == 0) {
 			// add the first max_len_pattern
 			max_len_patterns = append(max_len_patterns, max_len_pattern)
+			continue
 		}
 
 		// make sure this max_len_pattern does not already exist in another max_len_pattern
