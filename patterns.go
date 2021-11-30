@@ -21,6 +21,18 @@ all patterns are
 
 */
 
+func Equal(a, b []float64) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i, v := range a {
+		if v != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func add_if_not_existing(p []float64, patterns [][]float64) ([][]float64) {
 
 	var exists = false
@@ -77,7 +89,7 @@ func add_possible_patterns(p []float64, patterns [][]float64) ([][]float64) {
 		}
 
 		// a test in the other array direction must happen also to properly find every value
-		for cc := 2; cc < len(temp_pattern)-1; cc++ {
+		for cc := 2; cc < len(temp_pattern); cc++ {
 
 			var temp_pattern_inner = temp_pattern[0:cc];
 			//fmt.Printf("inner testing %+v\n", temp_pattern_inner)
@@ -226,16 +238,155 @@ func count_patterns_in_set(patterns [][]float64, set []float64) ([]uint64) {
 
 }
 
+func count_patterns_in_set_fast(patterns [][]float64, set []float64) ([]uint64) {
+
+	fmt.Printf("\ncounting patterns from:\t\t%+v\n", patterns)
+	fmt.Printf("in set:\t\t\t\t%+v\n\n", set)
+
+	// return the count of how many times each item in patterns[] exists in set
+	var matches = make([]uint64, len(patterns))
+
+	// this is for patterns that are beyond c and have already been tested within another pattern
+	var sub_pattern_indexes = make([]uint64, 0)
+	var starting_pos_in_patterns = 0
+
+	for c := range patterns {
+
+		var sub = false
+		for l := range sub_pattern_indexes {
+			if (sub_pattern_indexes[l] == uint64(c)) {
+				// this pattern (patterns[c]) is already in sub_pattern_indexes
+				sub = true
+				break
+			}
+		}
+		if (sub) {
+			fmt.Printf("pattern [%d]: %+v is already in sub_pattern_indexes", c, patterns[c])
+			continue
+		}
+
+		var pattern = patterns[c]
+
+		fmt.Printf("adding root pattern: %+v\n", pattern)
+
+		// find other patterns that can be tested in this pattern
+		// the premise being that
+		// 0 1 3 exists in
+		// 0 1 3 3
+		// 0 1 3 3 7
+		// and testing for both rather than repeating a test through everything for each will be faster
+		var patterns_within = make([][]float64, 0)
+		for n := c+1; n < len(patterns); n++ {
+
+			if (n == c) {
+				// this pattern is being tested
+				continue
+			}
+
+			var is_already = false
+			for nn := range sub_pattern_indexes {
+				if (sub_pattern_indexes[nn] == uint64(n)) {
+					// this pattern has already been tested
+					is_already = true
+					break
+				}
+			}
+
+			if (is_already) {
+				// this pattern is already tested
+				continue
+			}
+
+			var shortest = patterns[n]
+			var longest = patterns[c]
+
+			if (len(shortest) > len(longest)) {
+				longest = patterns[n]
+				shortest = patterns[c]
+			}
+
+			var is_within = true
+			for p := range shortest {
+				if (shortest[p] != longest[p]) {
+					is_within = false
+					break
+				}
+			}
+
+			if (is_within) {
+				sub_pattern_indexes = append(sub_pattern_indexes, uint64(n))
+				patterns_within = append(patterns_within, patterns[n])
+			}
+
+		}
+
+		// now add pattern to patterns_within
+		patterns_within = append(patterns_within, pattern)
+
+		fmt.Printf("\ntesting %d patterns: %+v\n", len(patterns_within), patterns_within)
+		fmt.Printf("starting position in patterns: %d\n", starting_pos_in_patterns)
+
+		// the first pattern in patterns_within is always the shortest in length
+		// and has the same values as each next pattern in patterns_within
+		// that continues through each patterns_within entry as such (this is what makes this counting function faster)
+		// 0 1
+		// 0 1 4
+		// 0 1 4 2
+
+		// test each pattern in patterns_within against a shift of the set, named shifting_set
+		// this is to look for the pattern at all indexes in the set
+		// the shifts look like
+		// 0 1 0 0 1 0 1 0 1 0
+		// 1 0 0 1 0 1 0 1 0
+		// 0 0 1 0 1 0 1 0
+		// and so on until
+		// 1 0 (because a pattern should be at least 2 values)
+		for n := range set {
+
+			var shifting_set = set[n:len(set)]
+			fmt.Printf("set shift: %+v\n", shifting_set)
+
+			// each pattern in patterns_within grows in length through patterns_within
+			// (1) that means we should test for each pattern in patterns_within until the shifting_set length is 1 less than the pattern of patterns_within length
+			for nn := range patterns_within {
+
+				fmt.Printf("\t (%d %d) testing [%d]: %+v\n", len(patterns_within[nn]), len(shifting_set), nn, patterns_within[nn])
+
+				if (len(patterns_within[nn])-1 > len(shifting_set)) {
+					// (1)
+					//break
+				}
+
+			}
+
+		}
+
+		starting_pos_in_patterns += len(patterns_within)
+
+		break
+
+	}
+
+	fmt.Printf("\n")
+
+	return matches
+
+}
+
 func main() {
 
-	var d = []float64 {0,1,0,0,1,0,1,0,1,0}
-	//var d = []float64 {1,2,3,4,5,6,7,8,9,10}
+	//var d = []float64 {0,1,0,0,1,0,1,0,1,0}
+	var d = []float64 {1,2,3,4,5,6,7,8,9,10}
 
 	//var patterns = get_unique_patterns(d, true)
 	var patterns = get_unique_patterns(d, false)
-	fmt.Printf("patterns (%d): %+v\n", len(patterns), patterns)
 
-	var counts = count_patterns_in_set(patterns, d)
+	fmt.Printf("patterns (%d):\n", len(patterns))
+	for n := range patterns {
+		fmt.Printf("%+v\n", patterns[n])
+	}
+
+	var counts = count_patterns_in_set_fast(patterns, d)
 	fmt.Printf("counts (%d): %+v\n", len(counts), counts)
 
 	// from here you can practically do any pattern matching with other data
