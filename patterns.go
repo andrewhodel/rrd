@@ -261,7 +261,7 @@ func count_patterns_in_set_fast(patterns [][]float64, set []float64) ([]uint64) 
 			}
 		}
 		if (sub) {
-			fmt.Printf("pattern [%d]: %+v is already in sub_pattern_indexes", c, patterns[c])
+			fmt.Printf("pattern [%d]: %+v is already in sub_pattern_indexes\n", c, patterns[c])
 			continue
 		}
 
@@ -344,17 +344,23 @@ func count_patterns_in_set_fast(patterns [][]float64, set []float64) ([]uint64) 
 		for n := range set {
 
 			var shifting_set = set[n:len(set)]
-			fmt.Printf("set shift: %+v\n", shifting_set)
+
+			if (len(shifting_set) == 1) {
+				// a set shift must have at least two values
+				break
+			}
+
+			fmt.Printf("set shift (%d): %+v\n", len(shifting_set), shifting_set)
 
 			// each pattern in patterns_within grows in length through patterns_within
-			// (1) that means we should test for each pattern in patterns_within until the shifting_set length is 1 less than the pattern of patterns_within length
+			// (1) that means we should test for each pattern in patterns_within until the shifting_set length is the length of the pattern in patterns_within
 			for nn := range patterns_within {
 
-				fmt.Printf("\t (%d %d) testing [%d]: %+v\n", len(patterns_within[nn]), len(shifting_set), nn, patterns_within[nn])
+				fmt.Printf("\t (%d %d) testing [%d]: %+v against %+v\n", len(patterns_within[nn]), len(shifting_set), nn, patterns_within[nn], shifting_set)
 
-				if (len(patterns_within[nn])-1 > len(shifting_set)) {
+				if (len(patterns_within[nn]) == len(shifting_set)) {
 					// (1)
-					//break
+					break
 				}
 
 			}
@@ -362,8 +368,6 @@ func count_patterns_in_set_fast(patterns [][]float64, set []float64) ([]uint64) 
 		}
 
 		starting_pos_in_patterns += len(patterns_within)
-
-		break
 
 	}
 
