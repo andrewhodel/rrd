@@ -86,7 +86,7 @@ func add_possible_patterns(p []float64, patterns [][]float64, shortest_pattern_l
 
 		// this result is removing the first value each time
 		var temp_pattern = p[c:max]
-		fmt.Printf("testing %+v\n", temp_pattern)
+		//fmt.Printf("testing %+v\n", temp_pattern)
 
 		if (len(patterns) == 0) {
 			// add the first
@@ -104,6 +104,8 @@ func add_possible_patterns(p []float64, patterns [][]float64, shortest_pattern_l
 			patterns = add_if_not_existing(temp_pattern_inner, patterns)
 
 		}
+
+		fmt.Printf("%d patterns found (%d/%d searches)\n", len(patterns), c, max-shortest_pattern_len)
 
 	}
 
@@ -126,7 +128,9 @@ func get_unique_patterns(d []float64, repeatable_patterns_only bool, shortest_pa
 		max = uint64(math.Floor(float64(len(d)/2)))
 	}
 
-	fmt.Printf("maximum number of patterns per index: %d\n", max);
+	fmt.Printf("minimum length of a pattern: %d\n", shortest_pattern_len);
+	fmt.Printf("maximum length of a pattern: %d\n", max);
+	fmt.Printf("number of values to search for patterns within: %d\n", len(d));
 
 	// get all the patterns
 	var patterns = make([][]float64, 0)
@@ -342,7 +346,7 @@ func main() {
 
 	// shorter testing sets
 	//d = []float64 {0,1,0,0,1,0,1,0,1,0}
-	d = []float64 {1,2,3,4,5,6,7,8,9,10}
+	//d = []float64 {1,2,3,4,5,6,7,8,9,10}
 
 	start0 := time.Now()
 	//var patterns = get_unique_patterns(d, true, 4)
