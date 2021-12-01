@@ -73,23 +73,23 @@ func add_if_not_existing(p []float64, patterns [][]float64) ([][]float64) {
 
 }
 
-func add_possible_patterns(p []float64, patterns [][]float64, shortest_pattern_len uint64) ([][]float64) {
+func add_possible_patterns(p []float64, patterns [][]float64, shortest_pattern_len uint64, longest_pattern_len uint64) ([][]float64) {
 
-	var max int = len(p)
-	for c := 0; c < max-1; c++ {
 
-		if (uint64(max-c) < shortest_pattern_len) {
+	var max = longest_pattern_len
+	for c := uint64(0); c < max-1; c++ {
+
+		if (max-c < shortest_pattern_len) {
 			// only test through the shortest_pattern_len
 			break
 		}
 
-		// result is removing the first value each time
+		// this result is removing the first value each time
 		var temp_pattern = p[c:max]
-		//fmt.Printf("testing %+v\n", temp_pattern)
+		fmt.Printf("testing %+v\n", temp_pattern)
 
 		if (len(patterns) == 0) {
 			// add the first
-			//fmt.Printf("adding the first max_len_pattern to patterns\n")
 			patterns = append(patterns, temp_pattern)
 		} else {
 			patterns = add_if_not_existing(temp_pattern, patterns)
@@ -117,89 +117,20 @@ func get_unique_patterns(d []float64, repeatable_patterns_only bool, shortest_pa
 	// d is an array of floats to find patterns in
 	// repeatable_patterns_only set to true is much faster but won't find patterns longer than math.Floor(float64(len(d)/2))
 
-	var max int = len(d);
+	var max = uint64(len(d));
 
 	if (repeatable_patterns_only) {
 		// this is the last entry that would fit inside the data set it came from as a repeating pattern
 		// for 10 that would be 5 as it would fit twice
 		// for 11 that would be 5 as it would fit twice
-		max = int(math.Floor(float64(len(d)/2)))
+		max = uint64(math.Floor(float64(len(d)/2)))
 	}
 
-	//fmt.Printf("maximum number of patterns per index: %d\n", max);
+	fmt.Printf("maximum number of patterns per index: %d\n", max);
 
-	var max_len_patterns = make([][]float64, 0)
-
-	for e := 0; e < len(d)-1; e++ {
-
-		var inner_max = max
-		if (len(d)-e <= max) {
-			inner_max = len(d)-e
-		}
-		inner_max -= 1
-
-		//fmt.Printf("from %d to %d\n", e, e+inner_max)
-
-		// starting at each index of d get a data set from e to e+inner_max
-		// that is the maximum length pattern for each index of the original data set
-		var max_len_pattern = make([]float64, 0)
-		for c := e; c<=e+inner_max; c++ {
-
-			max_len_pattern = append(max_len_pattern, d[c])
-			//fmt.Printf("%d\n", c)
-
-		}
-
-		//fmt.Printf("max_len_pattern len: %d\n", len(max_len_pattern))
-		if (uint64(len(max_len_pattern)) < shortest_pattern_len) {
-			// do not find patterns shorter than shortest_pattern_len
-			break
-		}
-
-		if (len(max_len_patterns) == 0) {
-			// add the first max_len_pattern
-			max_len_patterns = append(max_len_patterns, max_len_pattern)
-			continue
-		}
-
-		// make sure this max_len_pattern does not already exist in another max_len_pattern
-		// there is no purpose in using it to find inner patterns if it is already in a longer max_len_pattern
-		var new_matches_existing = false
-		for c := range max_len_patterns {
-
-			var same = true
-
-			// the newest max_len_pattern is always shortest, test it against each other max_len_pattern
-			for cc := range max_len_pattern {
-				if (max_len_pattern[cc] != max_len_patterns[c][cc]) {
-					same = false
-					break
-				}
-			}
-
-			if (same) {
-				new_matches_existing = true
-				break
-			}
-
-		}
-
-		if (!new_matches_existing) {
-			// this max_len_pattern is unique, it is safe to generate sub patterns from it
-			max_len_patterns = append(max_len_patterns, max_len_pattern)
-		}
-
-	}
-
-	// get all the patterns from each max_len_patterns entry
+	// get all the patterns
 	var patterns = make([][]float64, 0)
-	for e := range max_len_patterns {
-
-		//fmt.Printf("\nmax_len_pattern: %+v\n", max_len_patterns[e])
-
-		patterns = add_possible_patterns(max_len_patterns[e], patterns, shortest_pattern_len)
-
-	}
+	patterns = add_possible_patterns(d, patterns, shortest_pattern_len, max)
 
 	return patterns
 
@@ -401,19 +332,22 @@ func count_patterns_in_set_fast(patterns [][]float64, set []float64) ([]uint64) 
 
 func main() {
 
-	//var d = []float64 {0,1,0,0,1,0,1,0,1,0}
-	//var d = []float64 {1,2,3,4,5,6,7,8,9,10}
-
-	var long_count = 288
+	// use a long set of values
+	var long_count = 400
 	var d = make([]float64, long_count)
 	for n := 0; n < long_count; n++ {
 		var r = rand.Float64()
 		d[n] = r
 	}
-	fmt.Printf("set of %d floats generated\n", long_count)
 
+	// shorter testing sets
+	//d = []float64 {0,1,0,0,1,0,1,0,1,0}
+	d = []float64 {1,2,3,4,5,6,7,8,9,10}
+
+	start0 := time.Now()
 	//var patterns = get_unique_patterns(d, true, 4)
-	var patterns = get_unique_patterns(d, false, 40)
+	var patterns = get_unique_patterns(d, false, 4)
+	duration0 := time.Since(start0)
 
 	start1 := time.Now()
 	var counts_fast = count_patterns_in_set_fast(patterns, d)
@@ -423,9 +357,9 @@ func main() {
 	var counts = count_patterns_in_set(patterns, d)
 	duration2 := time.Since(start2)
 
-	fmt.Printf("patterns (%d):\n", len(patterns))
-	fmt.Printf("\ncounts FAST (%d)\n", duration1)
-	fmt.Printf("counts (%d)\n", duration2)
+	fmt.Printf("%d patterns (%dns):\n", len(patterns), duration0)
+	fmt.Printf("\ncounts FAST (%dns)\n", duration1)
+	fmt.Printf("counts (%dns)\n", duration2)
 
 	/*
 	for n := range patterns {
