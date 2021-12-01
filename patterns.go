@@ -77,6 +77,7 @@ func add_possible_patterns(p []float64, patterns [][]float64, shortest_pattern_l
 
 
 	var max = longest_pattern_len
+	// fix longest_pattern_len not shifting
 	for c := uint64(0); c < max-1; c++ {
 
 		if (max-c < shortest_pattern_len) {
@@ -340,13 +341,41 @@ func main() {
 	var long_count = 400
 	var d = make([]float64, long_count)
 	for n := 0; n < long_count; n++ {
-		var r = rand.Float64()
+		var r = math.Round(rand.Float64() * 100)
 		d[n] = r
 	}
+
+	// allow values to be tested more broadly
+	// call it fuzzy_factor
+	//
+	// 0, 1, 5, 7, 10
+	// has a range of 0:10 = 10
+	// an average resolution of 1.0000
+	// a length of 5
+	// the + or - for finding a matching value in a set should be
+	// $range / $resolution / $len
+	// 10/1/5 = [normal] = 2
+	//
+	// fuzzy_factor = [0:1] .1
+	// $range - $normal = [missing_effect] = 8
+	// $missing_effect * $fuzzy_factor = [per_value_range] = .08
+	// [-0.08:0.08], [0.92:1.08], [4.92:5.08], [6.92:7.08], [9.92:10.08]
+	//
+	// fuzzy_factor = [0:1] .5
+	// $range - $normal = [missing_effect] = 8
+	// $missing_effect * $fuzzy_factor = [per_value_range] = 4
+	// [-4:4], [-3:5], [1:9], [3:11], [6:14]
+	//
+	// fuzzy_factor = [0:1] 1
+	// $range - $normal = [missing_effect] = 8
+	// $missing_effect * $fuzzy_factor = [per_value_range] = 8
+	// [-8:8], [-7:9], [-3:13], [-1:15], [2:18]
 
 	// shorter testing sets
 	//d = []float64 {0,1,0,0,1,0,1,0,1,0}
 	//d = []float64 {1,2,3,4,5,6,7,8,9,10}
+
+	fmt.Printf("%+v\n\n\n", d)
 
 	start0 := time.Now()
 	//var patterns = get_unique_patterns(d, true, 4)
