@@ -36,7 +36,7 @@ type Rrd struct {
 	//RR			[][]big.Float	`bson:"rr" json:"rr"`
 	CurrentStep		int64		`bson:"currentStep" json:"currentStep"`
 	CurrentAvgCount		int64		`bson:"currentAvgCount" json:"currentAvgCount"`
-	// use a pointer for FirstUpdateTs so can check for nil
+	// use a pointer for FirstUpdateTs so nil values are possible
 	FirstUpdateTs		*int64		`bson:"firstUpdateTs" json:"firstUpdateTs"`
 	LastUpdateDataPoint	[]float64	`bson:"lastUpdateDataPoint" json:"lastUpdateDataPoint"`
 }
