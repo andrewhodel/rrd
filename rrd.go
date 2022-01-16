@@ -79,6 +79,10 @@ func Dump(rrdPtr *Rrd) {
 }
 
 func Update(intervalSeconds int64, totalSteps int64, dataType string, updateDataPoint []float64, rrdPtr *Rrd) {
+	// all timing is based on system time at execution of Update()
+	// data can be sent without knowledge of time on the distant side, as if you were receiving data from an unknown source or distant planet
+	// world internet latency via fiber could be more than 200ms and much longer in space
+	// a simulatedUpdateTime argument should be added later
 
 	var debug = false
 
@@ -177,29 +181,18 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 		for (c < totalSteps) {
 			timeSteps = append(timeSteps, *rrdPtr.FirstUpdateTs + (intervalSeconds * 1000 * c))
 
-			// this will use the next time slot if it is only 1ms after the start of it
+			// this will use the next time slot if it is 1s or more after the start of it
 			//if (updateTimeStamp > *rrdPtr.FirstUpdateTs + (intervalSeconds * 1000 * c)) {
 			//	currentTimeSlot = c
 			//}
 
-			// this will use the next time slot if it is received more than 5 seconds into it
+			// this will use the next time slot if it is 5s or more after the start of it
 			//if (updateTimeStamp > *rrdPtr.FirstUpdateTs + (intervalSeconds * 1000 * c) + 5000) {
 			//	currentTimeSlot = c
 			//}
 
-			// this will use the time slot if it is received (pct) of time through the next one or in this one
+			// this will use the next time slot if it is (pct of an interval duration) or more after the start of it
 			var pct float64 = .20
-			// this is the most reasonable solution with network latency being a factor and time being a constant
-			// it could be 50% or 70% really, but it seems that we should be discarding data that is that behind
-			// especially considering that the delay could be processing   -
-			//								--
-			//								--
-			//								---
-			//								---
-			//								---
-			// the explanation is that updates can be sent without knowledge of time on the distant side, as if you were receiving data from an unknown source or distant planet
-			// it needs to be that way because many devices with a tcp/ip stack don't have a NTP client
-			// or NTP isn't accurate enough
 			if (updateTimeStamp > *rrdPtr.FirstUpdateTs + (intervalSeconds * 1000 * c) + int64(float64(intervalSeconds * 1000) * pct)) {
 				currentTimeSlot = c
 			}
