@@ -27,7 +27,6 @@ type Rrd struct {
 	R			[][]float64	`json:"r"`
 	CurrentStep		int64		`json:"currentStep"`
 	CurrentAvgCount		int64		`json:"currentAvgCount"`
-	// use a pointer for FirstUpdateTs so we can check for nil
 	FirstUpdateTs		*int64		`json:"firstUpdateTs"`
 	LastUpdateDataPoint	[]float64	`json:"lastUpdateDataPoint"`
 }
@@ -66,7 +65,7 @@ Print the Rrd to the screen in a readable format.
 Patterns
 ========
 
-The pattern work is in patterns.go, you can already get every unique pattern in a data set and that should make it easy.
+The pattern gathering and detection work is in patterns/patterns.go.
 
 License
 =======
