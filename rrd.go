@@ -1,6 +1,6 @@
 /*
 
-Copyright 2021 Andrew Hodel
+Copyright 2022 Andrew Hodel
 	andrewhodel@gmail.com
 
 LICENSE MIT
@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strconv"
 	"math"
-	"math/big"
+	//"math/big"
 )
 
 const (
@@ -33,15 +33,12 @@ const (
 type Rrd struct {
 	D			[][]float64	`bson:"d" json:"d"`
 	R			[][]float64	`bson:"r" json:"r"`
+	//RR			[][]big.Float	`bson:"rr" json:"rr"`
 	CurrentStep		int64		`bson:"currentStep" json:"currentStep"`
 	CurrentAvgCount		int64		`bson:"currentAvgCount" json:"currentAvgCount"`
 	// use a pointer for FirstUpdateTs so can check for nil
 	FirstUpdateTs		*int64		`bson:"firstUpdateTs" json:"firstUpdateTs"`
 	LastUpdateDataPoint	[]float64	`bson:"lastUpdateDataPoint" json:"lastUpdateDataPoint"`
-	// Overflow fixes the problem of many overflows sent in a single step as math/big is used to calculate the rate from multiple float64 values
-	// as long as an interface isn't faster than 1.7976931348623157e+308 bits per second the rate will never be incorrect
-	// D needs to be changed to a uint64 data type to support 64 bit counters which means rrd.Update() needs to accept and store multiple data types
-	Overflow		[][]float64	`bson:"overflow" json:"overflow"`
 }
 
 func Dump(rrdPtr *Rrd) {
@@ -55,11 +52,11 @@ func Dump(rrdPtr *Rrd) {
 
 	fmt.Println("")
 
-	fmt.Printf("rrdPtr D (%d):\n", len(rrdPtr.D))
+	fmt.Printf("rrdPtr D (COUNTER VALUES) (%d):\n", len(rrdPtr.D))
 
 	for e := range rrdPtr.D {
 		for n := range rrdPtr.D[e] {
-			fmt.Printf("\t%f", rrdPtr.D[e][n])
+			fmt.Printf("\tInterval %d\t%f", e, rrdPtr.D[e][n])
 		}
 		fmt.Println("")
 	}
@@ -67,11 +64,11 @@ func Dump(rrdPtr *Rrd) {
 	fmt.Println("")
 
 	if (rrdPtr.R != nil) {
-		fmt.Printf("rrdPtr R (%d):\n", len(rrdPtr.R))
+		fmt.Printf("rrdPtr R (RATE OF COUNTER VALUES) (%d):\n", len(rrdPtr.R))
 
 		for e := range rrdPtr.R {
 			for n := range rrdPtr.R[e] {
-				fmt.Printf("\t%f", rrdPtr.R[e][n])
+				fmt.Printf("\tInterval %d\t%f", e, rrdPtr.R[e][n])
 			}
 			fmt.Println("")
 		}
@@ -125,10 +122,20 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 		// if the updateTimeStamp is farther away than firstUpdateTs+(totalSteps*intervalSeconds*1000)
 		// then it is an entirely new chart
 		if (updateTimeStamp >= *rrdPtr.FirstUpdateTs+(totalSteps*2*intervalSeconds*1000)) {
-			// set firstUpdateTs to nil so this will be considered the first update
-			// which resets all the data
+			// set firstUpdateTs to nil, this will be considered the first update
 			if debug { fmt.Println(ccBlue + "### THIS UPDATE IS SO MUCH NEWER THAN THE EXISTING DATA THAT IT REPLACES IT ###" + ccReset) }
 			rrdPtr.FirstUpdateTs = nil
+
+			// reset all the data
+			if (dataType == "COUNTER") {
+				// counter types need a rate calculation
+				rrdPtr.R = nil
+				rrdPtr.R = make([][]float64, totalSteps)
+			}
+
+			rrdPtr.D = nil
+			rrdPtr.D = make([][]float64, totalSteps)
+			rrdPtr.CurrentStep = 0
 
 		}
 	}
@@ -142,8 +149,6 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 		rrdPtr.D = make([][]float64, totalSteps)
 		if (dataType == "COUNTER") {
 			rrdPtr.R = make([][]float64, totalSteps)
-			// create the Overflow tracker
-			rrdPtr.Overflow = make([][]float64, len(updateDataPoint))
 		}
 
 		// insert the data for each data point
@@ -157,9 +162,6 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 		rrdPtr.FirstUpdateTs = new(int64)
 		rrdPtr.FirstUpdateTs = &updateTimeStamp
 
-		// set the CurrentStep to 0
-		rrdPtr.CurrentStep = 0
-
 	} else {
 
 		// this is not the first update
@@ -167,9 +169,6 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 
 		// this timestamp
 		if debug { fmt.Println("updateTimeStamp: " + strconv.FormatInt(updateTimeStamp, 10)) }
-
-		// this overflow
-		if debug { fmt.Printf("overflow: %v\n", rrdPtr.Overflow) }
 
 		// get the time steps for each position, based on firstUpdateTs
 		var timeSteps []int64
@@ -190,7 +189,7 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 
 			// this will use the time slot if it is received (pct) of time through the next one or in this one
 			var pct float64 = .20
-			// this seems like the most reasonable solution with network latency being a factor
+			// this is the most reasonable solution with network latency being a factor and time being a constant
 			// it could be 50% or 70% really, but it seems that we should be discarding data that is that behind
 			// especially considering that the delay could be processing   -
 			//								--
@@ -198,9 +197,9 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 			//								---
 			//								---
 			//								---
-			// the explanation is that updates can be sent without knowledge of time on the far side, as if you were receiving data from an unknown source or distant planet
-			// it needs to be that way because many devices with a tcp/ip stack don't have a ntp client
-			// or NTP isn't accurate enough at a high resolution
+			// the explanation is that updates can be sent without knowledge of time on the distant side, as if you were receiving data from an unknown source or distant planet
+			// it needs to be that way because many devices with a tcp/ip stack don't have a NTP client
+			// or NTP isn't accurate enough
 			if (updateTimeStamp > *rrdPtr.FirstUpdateTs + (intervalSeconds * 1000 * c) + int64(float64(intervalSeconds * 1000) * pct)) {
 				currentTimeSlot = c
 			}
@@ -299,54 +298,13 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 
 			if (rrdPtr.CurrentStep == 0) {
 				// there was a buffer calculation that was too greedy and put a new update in the first step
-				// which is impossible for a new step, so make the current step 1
+				// which is impossible for a new step, make the current step 1
 				rrdPtr.CurrentStep = 1
 			}
 
 			if debug { fmt.Println(ccBlue + "inserting data at: " + strconv.FormatInt(rrdPtr.CurrentStep, 10) + ccReset) }
 
-			// if the previous {total_missing_to_fill} points are missing data, fill them in with this updates data
-			// the problem with this is not that bad, it could increase the update interval by a multiple of {total_missing_to_fill}
-			// but it allows situations like a 5 ms update interval and an update every 6ms to continue properly showing data for counters
-			// which is a reasonable expectation in network software
-
-			// the time slot calculation already has a buffer (some % after intervalSeconds into the next step) which resolves most of this
-
-			// the reason you want to update the last {total_missing_to_fill} data points rather than just one, is because you could have a situation where 10 data points were sent
-			// expecting .1 second intervals yet took 2 seconds for the network to provide them
-			// this could result in ugly data and probably should be set based on expected network latency, realized latency peaks and step interval
-			// especially when using intervals that are milliseconds or nanoseconds apart
-
-			// you could just take this block out if you knew for a fact that data would arrive on time (processing and collection on the same hardware)
-			// of course if you knew that for a fact, you wouldn't have to worry about this block executing
-
-			// I have explained it below (EXPLANATION) for the GAUGE and COUNTER types
-
-			var total_missing_to_fill int64 = 1
-			var l int64 = total_missing_to_fill
-			for (l > 0) {
-
-				if (rrdPtr.CurrentStep - l < 0) {
-					// first entry was already filled in
-					break
-				}
-
-				if (len(rrdPtr.D[rrdPtr.CurrentStep - l]) != len(updateDataPoint)) {
-					// this previous set of data points wasn't filled in
-					// use this data point
-					for e := range updateDataPoint {
-						rrdPtr.D[rrdPtr.CurrentStep - l] = append(rrdPtr.D[rrdPtr.CurrentStep - l], updateDataPoint[e])
-					}
-					if debug { fmt.Printf("PREVIOUS DATA STEP WAS MISSING\n\a\a") }
-
-				}
-
-				l--
-			}
-
-			// remove any data in this step
-			// otherwise append will continue adding data to each step
-			// there would have been data in a step after a shift
+			// remove any data in this step because this is a NEW STEP
 			rrdPtr.D[rrdPtr.CurrentStep] = nil
 			if (dataType == "COUNTER") {
 				rrdPtr.R[rrdPtr.CurrentStep] = nil
@@ -355,13 +313,6 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 			// handle different dataType
 			// this is normal processing for an update, assuming there was no previous data missing
 			if (dataType == "GAUGE") {
-
-				// EXPLANATION
-				// if data is missing in every other update, charts would always look terrible
-				// D D D D D N D N D N D N D
-
-				// best to fill in the values only if <3 were missing, to show real data outages
-				// this works because 5 minute updates would require quite a bit of loss to make a 2 day data point go missing
 
 				// insert the data for each data point
 				for e := range updateDataPoint {
@@ -373,129 +324,65 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 
 			} else if (dataType == "COUNTER") {
 
-				// EXPLANATION
-				// if data is missing in every other update, rates would never be calculated
-				// D D D D D N D N D N D N D
-				// R R R R R N N N N N N N N
-
-				// with a counter, you can always fill in the data
-
-				// fill in the previous point with the data from this update
-				// not all, only the last 1 because we want to be able to show update outages
-
 				// for each data point
 				for e := range updateDataPoint {
 
-					big_d := new(big.Float).SetFloat64(float64(updateDataPoint[e]))
+					if (rrdPtr.D[rrdPtr.CurrentStep-1] == nil) {
 
-					// add all the previous overflows to prev
-					big_prev := new(big.Float).SetFloat64(float64(0.0))
-					for n := range rrdPtr.Overflow[e] {
-						big_prev.Add(big_prev, new(big.Float).SetFloat64(rrdPtr.Overflow[e][n]))
-					}
-
-					// reset Overflow
-					rrdPtr.Overflow[e] = nil
-
-					if (rrdPtr.D[rrdPtr.CurrentStep-1][e] > updateDataPoint[e]) {
-
-						// counter overflow, check if this happened near 32 or 64 bit limit
-						if debug { fmt.Println(ccBlue + "new step overflow" + ccReset) }
-
-						// the 32 bit limit for an unsigned integer is 4,294,967,295
-						// check if the last step was that or less
-						if (rrdPtr.D[rrdPtr.CurrentStep-1][e] <= math.MaxUint32) {
-							// make 32bit overflow adjustments
-							if debug { fmt.Println(ccBlue + "32 bit overflow" + ccReset) }
-
-							// add the remainder of subtracting the last data point from the limit to the updateDataPoint
-							big_d.Add(big_d, new(big.Float).SetFloat64(float64(2147483647) - float64(rrdPtr.D[rrdPtr.CurrentStep-1][e])))
-
-						} else {
-							// the 64 bit limit is 18,446,744,073,709,551,615
-							// make 64bit overflow adjustments
-							if debug { fmt.Println(ccBlue + "64 bit overflow" + ccReset) }
-
-							// add the remainder of subtracting the last data point from the limit to the updateDataPoint
-							big_d.Add(big_d, new(big.Float).SetFloat64(float64(math.MaxUint64) - float64(rrdPtr.D[rrdPtr.CurrentStep-1][e])))
-
+						if debug {
+							fmt.Printf("Previous interval is nil\n")
 						}
 
-						// store the overflow, if big_d > the float64 limit then store multiple float64 values
-						if (big_d.Cmp(new(big.Float).SetFloat64(float64(math.MaxUint64))) == 1) {
-							// divide big_d by the limit
-							v := new(big.Float).Quo(big_d, new(big.Float).SetFloat64(float64(math.MaxUint64)))
+						// only insert the data, there is no previous interval data so no rate can be calculated
+						rrdPtr.D[rrdPtr.CurrentStep] = append(rrdPtr.D[rrdPtr.CurrentStep], updateDataPoint[e])
 
-							f, accuracy := v.Float64()
-							_ = accuracy
+						continue
 
-							// get the floor value of f
-							floor := math.Floor(f)
+					}
 
-							// get the remainder
-							rem := f - floor
+					// check for a counter reset
+					// known by this interval value being less than the previous
+					if (rrdPtr.D[rrdPtr.CurrentStep-1][e] > updateDataPoint[e]*3) {
 
-							// store floor values of the limit
-							var vc int = 0
-							for (vc < int(floor)) {
-								rrdPtr.Overflow[e] = append(rrdPtr.Overflow[e], float64(math.MaxUint64))
-								vc++
-							}
+						// the counter has reset, need to check if this happened near the 32 or 64 bit limit
+						if debug { fmt.Println(ccBlue + "counter reset" + ccReset) }
 
-							// store 1 value of the limit * the remainder
-							rrdPtr.Overflow[e] = append(rrdPtr.Overflow[e], float64(math.MaxUint64 * rem))
+						if (rrdPtr.D[rrdPtr.CurrentStep-1][e] < math.MaxUint32 - (math.MaxUint32*.1)) {
+
+							// the last update was within 10% of the 32 bit limit
+							// make 32bit adjustments
+
+							// add the remainder of subtracting the last data point from the 32 bit limit to the updateDataPoint
+							updateDataPoint[e] += math.MaxUint32 - rrdPtr.D[rrdPtr.CurrentStep-1][e]
 
 						} else {
-							// store the overflow
-							v, accuracy := big_d.Float64()
-							_ = accuracy
-							rrdPtr.Overflow[e] = append(rrdPtr.Overflow[e], float64(v))
+						//} else if (rrdPtr.D[rrdPtr.CurrentStep-1][e] < math.MaxUint64 - (math.MaxUint64*.01)) {
+
+							// this is an else block until some network interface counters are 128 bit
+
+							// as the rrd struct number types are currently Float64 (with a limit less than Uint64)
+							// this rrd library must be upgraded to use math/big floats anyway
+
+							// the last update was within 10% of the 64 bit limit
+							// make 64bit adjustments
+
+							// add the remainder of subtracting the last data point from the 64 bit limit to the updateDataPoint
+							updateDataPoint[e] += math.MaxUint64 - rrdPtr.D[rrdPtr.CurrentStep-1][e]
+
 						}
 
 					}
 
-					// for a counter, need to divide the difference of this step and the previous step by
-					// the difference in seconds between the updates
-
-					// add the last step and big_prev to get the "last step"
-					big_prev.Add(big_prev, new(big.Float).SetFloat64(rrdPtr.D[rrdPtr.CurrentStep-1][e]))
-					// subtract big_prev from big_d to get the units between
-					big_d.Add(big_d, big_prev.Neg(big_prev))
-
-					diff, accuracy := big_d.Float64()
-					_ = accuracy
-
-					diff = math.Abs(diff)
-
-					if debug { fmt.Println("calculating the rate for " + strconv.FormatFloat(diff, 'f', -1, 64) + " units over " + strconv.FormatInt(intervalSeconds, 10) + " seconds") }
-					var rate float64 = diff / float64(intervalSeconds)
+					// calculate the rate because this is a counter
+					var rate float64 = updateDataPoint[e]-rrdPtr.D[rrdPtr.CurrentStep-1][e]
+					if debug { fmt.Println("calculating the rate for " + strconv.FormatFloat(rate, 'f', -1, 64) + " units over " + strconv.FormatInt(intervalSeconds, 10) + " seconds") }
+					rate = rate / float64(intervalSeconds)
 					if debug { fmt.Println("inserting data with rate " + strconv.FormatFloat(rate, 'f', -1, 64) + " at time slot " + strconv.FormatInt(rrdPtr.CurrentStep, 10)) }
 					rrdPtr.R[rrdPtr.CurrentStep] = append(rrdPtr.R[rrdPtr.CurrentStep], rate)
 
 					// insert the data
 					rrdPtr.D[rrdPtr.CurrentStep] = append(rrdPtr.D[rrdPtr.CurrentStep], updateDataPoint[e])
 
-				}
-
-				var l int64 = total_missing_to_fill
-				for (l > 0) {
-
-					if (rrdPtr.CurrentStep - l < 0) {
-						// first entry was already filled in
-						break
-					}
-
-					if (len(rrdPtr.R[rrdPtr.CurrentStep - l]) != len(updateDataPoint)) {
-						// this previous set of data points wasn't filled in
-						// use the rate that was calculated
-						for e := range updateDataPoint {
-							rrdPtr.R[rrdPtr.CurrentStep - l] = append(rrdPtr.R[rrdPtr.CurrentStep - l], rrdPtr.R[rrdPtr.CurrentStep][e])
-						}
-						if debug { fmt.Printf("PREVIOUS RATE DATA STEP WAS MISSING\n\a\a") }
-
-					}
-
-					l--
 				}
 
 			} else {
@@ -540,68 +427,6 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 			} else if (dataType == "COUNTER") {
 				// set the counter on this step to that of this update
 				for e := range updateDataPoint {
-
-					big_d := new(big.Float).SetFloat64(float64(updateDataPoint[e]))
-
-					// check for counter overflow in the same step
-
-					if (rrdPtr.D[rrdPtr.CurrentStep][e] > updateDataPoint[e]) {
-
-						// counter overflow, check if this happened near 32 or 64 bit limit
-						if debug { fmt.Println(ccBlue + "same step overflow" + ccReset) }
-
-						// the 32 bit limit for an unsigned integer is 4,294,967,295
-						if (rrdPtr.D[rrdPtr.CurrentStep][e] <= math.MaxUint32) {
-							// make 32bit overflow adjustments
-							if debug { fmt.Println(ccBlue + "32 bit overflow" + ccReset) }
-
-							// add the remainder of subtracting this data point from the limit to the updateDataPoint
-							big_d.Add(big_d, new(big.Float).SetFloat64(float64(2147483647) - float64(rrdPtr.D[rrdPtr.CurrentStep][e])))
-
-						} else {
-							// the 64 bit limit is 18,446,744,073,709,551,615
-							// make 64bit overflow adjustments
-							if debug { fmt.Println(ccBlue + "64 bit overflow" + ccReset) }
-
-							// add the remainder of subtracting this data point from the limit to the updateDataPoint
-							big_d.Add(big_d, new(big.Float).SetFloat64(float64(math.MaxUint64) - float64(rrdPtr.D[rrdPtr.CurrentStep][e])))
-
-						}
-
-						// store the overflow, if big_d > the float64 limit then store multiple float64 values
-						if (big_d.Cmp(new(big.Float).SetFloat64(float64(math.MaxUint64))) == 1) {
-							// divide big_d by the limit
-							v := new(big.Float).Quo(big_d, new(big.Float).SetFloat64(float64(math.MaxUint64)))
-
-							f, accuracy := v.Float64()
-							_ = accuracy
-
-							// get the floor value of f
-							floor := math.Floor(f)
-
-							// get the remainder
-							rem := f - floor
-
-							// store floor values of the limit
-							var vc int = 0
-							for (vc < int(floor)) {
-								rrdPtr.Overflow[e] = append(rrdPtr.Overflow[e], float64(math.MaxUint64))
-								vc++
-							}
-
-							// store 1 value of the limit * the remainder
-							rrdPtr.Overflow[e] = append(rrdPtr.Overflow[e], float64(math.MaxUint64 * rem))
-
-						} else {
-							// store the overflow
-							v, accuracy := big_d.Float64()
-							_ = accuracy
-							rrdPtr.Overflow[e] = append(rrdPtr.Overflow[e], float64(v))
-						}
-
-					}
-
-					// store the data point
 					rrdPtr.D[rrdPtr.CurrentStep][e] = updateDataPoint[e]
 				}
 
@@ -612,6 +437,13 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 		}
 
 		if debug { fmt.Printf("data: %+v\n", rrdPtr.D) }
+
+		if (debug) {
+			if (len(rrdPtr.D[rrdPtr.CurrentStep]) != len(updateDataPoint)) {
+				// something is wrong
+				fmt.Printf("\nDATA LENGTH IS OFF\n\a\a")
+			}
+		}
 
 	}
 

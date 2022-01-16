@@ -71,7 +71,7 @@ The pattern work is in patterns.go, you can already get every unique pattern in 
 License
 =======
 
-Copyright 2021 Andrew Hodel
+Copyright 2022 Andrew Hodel
 	andrewhodel@gmail.com
 
 LICENSE MIT

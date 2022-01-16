@@ -19,7 +19,17 @@ func main() {
 
 	var rrdPtr rrd.Rrd
 
+	var update_count = 0
+
 	for (true) {
+
+		if (update_count == 5) {
+			// simulate missed updates
+			fmt.Printf("simulating 12 seconds of missed updates\n")
+			time.Sleep(12 * time.Second)
+			update_count += 1
+			continue
+		}
 
 		dat, err := ioutil.ReadFile("/proc/net/dev")
 		check(err)
@@ -66,6 +76,9 @@ func main() {
 		rrd.Dump(&rrdPtr)
 
 		time.Sleep(5 * time.Second)
+
+		update_count += 1
+
 	}
 
 }
