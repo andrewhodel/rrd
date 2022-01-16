@@ -181,7 +181,7 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 		for (c < totalSteps) {
 			timeSteps = append(timeSteps, *rrdPtr.FirstUpdateTs + (intervalSeconds * 1000 * c))
 
-			// this will use the next time slot if it is 1s or more after the start of it
+			// this will use the next time slot if it is 1ms or more after the start of it
 			//if (updateTimeStamp > *rrdPtr.FirstUpdateTs + (intervalSeconds * 1000 * c)) {
 			//	currentTimeSlot = c
 			//}
