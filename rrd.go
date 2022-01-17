@@ -64,7 +64,7 @@ func Dump(rrdPtr *Rrd) {
 	fmt.Println("")
 
 	if (rrdPtr.R != nil) {
-		fmt.Printf("rrdPtr R (RATE OF COUNTER VALUES) (%d):\n", len(rrdPtr.R))
+		fmt.Printf("rrdPtr R (RATE OF COUNTER INTERVALS) (%d):\n", len(rrdPtr.R))
 
 		for e := range rrdPtr.R {
 			for n := range rrdPtr.R[e] {
@@ -333,43 +333,53 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 
 					}
 
+					// calculate the rate because this is a counter
+					// get the value of the interval
+					var intervalValue float64 = updateDataPoint[e]-rrdPtr.D[rrdPtr.CurrentStep-1][e]
+
 					// check for a counter reset
-					// known by this interval value being less than the previous
-					if (rrdPtr.D[rrdPtr.CurrentStep-1][e] > updateDataPoint[e]*3) {
+					// known by this update value being less than the previous
+					if (rrdPtr.D[rrdPtr.CurrentStep-1][e] > updateDataPoint[e]) {
 
 						// the counter has reset, need to check if this happened near the 32 or 64 bit limit
 						if debug { fmt.Println(ccBlue + "counter reset" + ccReset) }
 
-						if (rrdPtr.D[rrdPtr.CurrentStep-1][e] < math.MaxUint32 - (math.MaxUint32*.1)) {
+						if (rrdPtr.D[rrdPtr.CurrentStep-1][e] <= math.MaxUint32) {
 
-							// the last update was within 10% of the 32 bit limit
+							// the last update was less than or equal to the 32 bit uint limit
 							// make 32bit adjustments
 
 							// add the remainder of subtracting the last data point from the 32 bit limit to the updateDataPoint
-							updateDataPoint[e] += math.MaxUint32 - rrdPtr.D[rrdPtr.CurrentStep-1][e]
+							var r float64 = updateDataPoint[e] + math.MaxUint32 - rrdPtr.D[rrdPtr.CurrentStep-1][e]
+							// use it for rate calculation
+							intervalValue = r-rrdPtr.D[rrdPtr.CurrentStep-1][e]
 
+						//} else if (rrdPtr.D[rrdPtr.CurrentStep-1][e] <= math.MaxUint64) {
 						} else {
-						//} else if (rrdPtr.D[rrdPtr.CurrentStep-1][e] < math.MaxUint64 - (math.MaxUint64*.01)) {
 
 							// this is an else block until some network interface counters are 128 bit
 
 							// as the rrd struct number types are currently Float64 (with a limit less than Uint64)
 							// this rrd library must be upgraded to use math/big floats anyway
 
-							// the last update was within 10% of the 64 bit limit
+							// the last update was less than or equal to the 64 bit uint limit
 							// make 64bit adjustments
 
 							// add the remainder of subtracting the last data point from the 64 bit limit to the updateDataPoint
-							updateDataPoint[e] += math.MaxUint64 - rrdPtr.D[rrdPtr.CurrentStep-1][e]
+							//var r float64 = updateDataPoint[e] + math.MaxUint64 - rrdPtr.D[rrdPtr.CurrentStep-1][e]
+							// use it for rate calculation
+							//intervalValue = r-rrdPtr.D[rrdPtr.CurrentStep-1][e]
+
+							// once math/big float is implemented, uncomment the lines above to support 64 bit counter resets
+							// use the update value as intervalValue, showing the rate calculated as the last update being 0
+							intervalValue = updateDataPoint[e]
 
 						}
 
 					}
 
-					// calculate the rate because this is a counter
-					var rate float64 = updateDataPoint[e]-rrdPtr.D[rrdPtr.CurrentStep-1][e]
-					if debug { fmt.Println("calculating the rate for " + strconv.FormatFloat(rate, 'f', -1, 64) + " units over " + strconv.FormatInt(intervalSeconds, 10) + " seconds") }
-					rate = rate / float64(intervalSeconds)
+					if debug { fmt.Println("calculating the rate for " + strconv.FormatFloat(intervalValue, 'f', -1, 64) + " units over " + strconv.FormatInt(intervalSeconds, 10) + " seconds") }
+					var rate float64 = intervalValue / float64(intervalSeconds)
 					if debug { fmt.Println("inserting data with rate " + strconv.FormatFloat(rate, 'f', -1, 64) + " at time slot " + strconv.FormatInt(rrdPtr.CurrentStep, 10)) }
 					rrdPtr.R[rrdPtr.CurrentStep] = append(rrdPtr.R[rrdPtr.CurrentStep], rate)
 
