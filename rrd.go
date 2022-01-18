@@ -350,9 +350,8 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 							// make 32bit adjustments
 
 							// add the remainder of subtracting the last data point from the 32 bit limit to the updateDataPoint
-							var r float64 = updateDataPoint[e] + math.MaxUint32 - rrdPtr.D[rrdPtr.CurrentStep-1][e]
 							// use it for rate calculation
-							intervalValue = r-rrdPtr.D[rrdPtr.CurrentStep-1][e]
+							intervalValue = updateDataPoint[e] + math.MaxUint32 - rrdPtr.D[rrdPtr.CurrentStep-1][e]
 
 						//} else if (rrdPtr.D[rrdPtr.CurrentStep-1][e] < math.MaxUint64) {
 						} else {
@@ -366,9 +365,8 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 							// make 64bit adjustments
 
 							// add the remainder of subtracting the last data point from the 64 bit limit to the updateDataPoint
-							//var r float64 = updateDataPoint[e] + math.MaxUint64 - rrdPtr.D[rrdPtr.CurrentStep-1][e]
 							// use it for rate calculation
-							//intervalValue = r-rrdPtr.D[rrdPtr.CurrentStep-1][e]
+							//intervalValue = updateDataPoint[e] + math.MaxUint64 - rrdPtr.D[rrdPtr.CurrentStep-1][e]
 
 							// once math/big float is implemented, uncomment the lines above to support 64 bit counter resets
 							// use the update value as intervalValue, showing the rate calculated as the last update being 0
