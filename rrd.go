@@ -344,32 +344,31 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 						// the counter has reset, need to check if this happened near the 32 or 64 bit limit
 						if debug { fmt.Println(ccBlue + "counter reset" + ccReset) }
 
-						if (rrdPtr.D[rrdPtr.CurrentStep-1][e] < math.MaxUint32) {
+						if (rrdPtr.D[rrdPtr.CurrentStep-1][e] < math.MaxUint32 && rrdPtr.D[rrdPtr.CurrentStep-1][e] > math.MaxUint32 * .7) {
 
-							// the last update was less than or equal to the 32 bit uint limit
+							// the last update was between 70% and 100% of the 32 bit uint limit
 							// make 32bit adjustments
 
 							// add the remainder of subtracting the last data point from the 32 bit limit to the updateDataPoint
 							// use it for rate calculation
 							intervalValue = updateDataPoint[e] + math.MaxUint32 - rrdPtr.D[rrdPtr.CurrentStep-1][e]
 
-						//} else if (rrdPtr.D[rrdPtr.CurrentStep-1][e] < math.MaxUint64) {
-						} else {
+						} else if (rrdPtr.D[rrdPtr.CurrentStep-1][e] < math.MaxUint64 && rrdPtr.D[rrdPtr.CurrentStep-1][e] > math.MaxUint64 * .7) {
 
-							// this is an else block until some network interface counters are 128 bit
-
-							// as the rrd struct number types are currently Float64 (with a limit less than Uint64)
+							// the rrd struct number types are currently Float64 (with a limit less than Uint64)
 							// this rrd library must be upgraded to use math/big floats anyway
 
-							// the last update was less than or equal to the 64 bit uint limit
+							// the last update was between 70% and 100% of the 64 bit uint limit
 							// make 64bit adjustments
 
 							// add the remainder of subtracting the last data point from the 64 bit limit to the updateDataPoint
 							// use it for rate calculation
-							//intervalValue = updateDataPoint[e] + math.MaxUint64 - rrdPtr.D[rrdPtr.CurrentStep-1][e]
+							intervalValue = updateDataPoint[e] + math.MaxUint64 - rrdPtr.D[rrdPtr.CurrentStep-1][e]
 
-							// once math/big float is implemented, uncomment the lines above to support 64 bit counter resets
+						} else {
+
 							// use the update value as intervalValue, showing the rate calculated as the last update being 0
+							// because the reset wasn't in a valid range for a counter data type maximum
 							intervalValue = updateDataPoint[e]
 
 						}
