@@ -39,6 +39,7 @@ type Rrd struct {
 	// use a pointer for FirstUpdateTs so nil values are possible
 	FirstUpdateTs		*int64		`bson:"firstUpdateTs" json:"firstUpdateTs"`
 	LastUpdateDataPoint	[]float64	`bson:"lastUpdateDataPoint" json:"lastUpdateDataPoint"`
+	MinimumDataPoints	uint64		`bson:"minimumDataPoints" json:"minimumDataPoints"`
 }
 
 func Dump(rrdPtr *Rrd) {
@@ -82,12 +83,59 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 	// all timing is based on system time at execution of Update()
 	// data can be sent without knowledge of time on the distant side, as if you were receiving data from an unknown source or distant planet
 	// world internet latency via fiber could be more than 200ms and much longer in space
-	// a simulatedUpdateTime argument should be added later
 
 	var debug = false
 
 	if (updateDataPoint == nil) {
 		return
+	}
+
+	if (len(updateDataPoint) < int(rrdPtr.MinimumDataPoints)) {
+		if debug { fmt.Printf("updateDataPoint must have at least %d values\n", rrdPtr.MinimumDataPoints) }
+		return
+	} else if (len(updateDataPoint) > int(rrdPtr.MinimumDataPoints)) {
+		// increase the minimum length when updateDataPoint is longer
+		rrdPtr.MinimumDataPoints = uint64(len(updateDataPoint))
+
+		// make all data point arrays at least the length of this update
+		for n := range rrdPtr.D {
+
+			if (dataType == "COUNTER") {
+				// R values
+
+				if (len(rrdPtr.R[n]) == 0) {
+					// skip [] values
+				} else if (len(rrdPtr.R[n]) != int(rrdPtr.MinimumDataPoints)) {
+					// add zeroes
+					var cur_len = len(rrdPtr.R[n])
+					var new_value_count = int(rrdPtr.MinimumDataPoints) - cur_len
+					var l = 0
+					for (l < new_value_count) {
+						// add a zero for each new field
+						rrdPtr.R[n] = append(rrdPtr.R[n], float64(0))
+						l = l + 1
+					}
+				}
+
+			}
+
+			// D values
+			if (len(rrdPtr.D[n]) == 0) {
+				// skip [] values
+			} else if (len(rrdPtr.D[n]) != int(rrdPtr.MinimumDataPoints)) {
+				// add zeroes
+				var cur_len = len(rrdPtr.D[n])
+				var new_value_count = int(rrdPtr.MinimumDataPoints) - cur_len
+				var l = 0
+				for (l < new_value_count) {
+					// add a zero for each new field
+					rrdPtr.D[n] = append(rrdPtr.D[n], float64(0))
+					l = l + 1
+				}
+			}
+
+		}
+
 	}
 
 	if (rrdPtr.FirstUpdateTs == nil) {
