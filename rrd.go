@@ -81,8 +81,7 @@ func Dump(rrdPtr *Rrd) {
 
 func Update(dbg bool, intervalSeconds int64, totalSteps int64, dataType string, updateDataPoint []float64, rrdPtr *Rrd) {
 	// all timing is based on system time at execution of Update()
-	// data can be sent without knowledge of time on the distant side, as if you were receiving data from an unknown source or distant planet
-	// world internet latency via fiber could be more than 200ms and much longer in space
+	// data can be sent from any time zone, even ones you don't know about yet
 
 	var debug = false
 	if (dbg == true) {
@@ -255,11 +254,12 @@ func Update(dbg bool, intervalSeconds int64, totalSteps int64, dataType string, 
 			c++
 		}
 
+		// currentTimeSlot will always be now or the newest because the loop iterates totalSteps times
 		if debug { fmt.Println("currentTimeSlot: " + strconv.FormatInt(currentTimeSlot, 10)) }
 
 		// now check if this update is in the current time slot or a newer one
-		if (updateTimeStamp > timeSteps[rrdPtr.CurrentStep+1]) {
-			// this update is in a completely new time slot
+		if (updateTimeStamp >= timeSteps[rrdPtr.CurrentStep+1]) {
+			// this update is in a new time slot
 			if debug { fmt.Println(ccBlue + "##### NEW STEP ##### this update is in a new step" + ccReset) }
 
 			// set the currentStep to the currentTimeSlot
@@ -270,26 +270,28 @@ func Update(dbg bool, intervalSeconds int64, totalSteps int64, dataType string, 
 
 				// calculate how much to shift by
 				var shift int64 = 1
-				if (updateTimeStamp >= *rrdPtr.FirstUpdateTs+(totalSteps*intervalSeconds*1000)) {
-					// this update needs to shift by more than 1 but obviously not more than the entire data set length
-					// because if that were true, the data would have already been reset
-					var time_diff int64 = updateTimeStamp - (*rrdPtr.FirstUpdateTs+(totalSteps*intervalSeconds*1000))
+				if (updateTimeStamp >= *rrdPtr.FirstUpdateTs + (totalSteps * intervalSeconds * 1000)) {
+					// this update needs to shift by more than 1 time slot
+					var time_diff int64 = updateTimeStamp - (*rrdPtr.FirstUpdateTs + (totalSteps * intervalSeconds * 1000))
+
 					if debug { fmt.Println("time_diff in ms", time_diff) }
-					// shift by the number of steps beyond the last considering the original firstUpdateTs
+
+					// shift by the number of steps beyond the last
 					shift = (time_diff / (intervalSeconds * 1000)) - 1
 				}
+
+				if debug { fmt.Println(ccRed + "shifting data set by: " + strconv.FormatInt(shift, 10) + ccReset) }
 
 				if (shift > 0) {
 
 					// shift the data set
-					if debug { fmt.Println(ccRed + "shifting data set by: " + strconv.FormatInt(shift, 10) + ccReset) }
 
-					var temp [][]float64
+					var temp = make([][]float64, totalSteps)
 					for e := range rrdPtr.D {
 
 						if (int64(e) >= shift) {
-							// append data points more distant than _shift_ to temp
-							temp = append(temp, rrdPtr.D[e])
+							// add data points before shift, at their original position - shift
+							temp[e - int(shift)] = rrdPtr.D[e]
 						}
 
 					}
@@ -297,22 +299,16 @@ func Update(dbg bool, intervalSeconds int64, totalSteps int64, dataType string, 
 					// copy temp to rrdPtr.D
 					copy(rrdPtr.D, temp)
 
-					if (int64(len(rrdPtr.D)) < totalSteps) {
-						var p int64 = 0
-						// add empty entries to the end
-						for (p < totalSteps - int64(len(rrdPtr.D))) {
-							rrdPtr.D = append(rrdPtr.D, make([]float64, len(updateDataPoint)))
-							p++
-						}
-					}
-
 					if (dataType == "COUNTER") {
-						var temp [][]float64
+
+						// shift the existing rates
+
+						var temp = make([][]float64, totalSteps)
 						for e := range rrdPtr.R {
 
 							if (int64(e) >= shift) {
-								// append data points more distant than _shift_ to temp
-								temp = append(temp, rrdPtr.R[e])
+								// add data points before shift, at their original position - shift
+								temp[e - int(shift)] = rrdPtr.D[e]
 							}
 
 						}
@@ -320,34 +316,16 @@ func Update(dbg bool, intervalSeconds int64, totalSteps int64, dataType string, 
 						// copy temp to rrdPtr.R
 						copy(rrdPtr.R, temp)
 
-						if (int64(len(rrdPtr.R)) < totalSteps) {
-							var p int64 = 0
-							// add empty entries to the end
-							for (p < totalSteps - int64(len(rrdPtr.R))) {
-								rrdPtr.R = append(rrdPtr.R, make([]float64, len(updateDataPoint)))
-								p++
-							}
-						}
 					}
 
-					// add intervalSeconds to firstUpdateTs
-					*rrdPtr.FirstUpdateTs = *rrdPtr.FirstUpdateTs+(intervalSeconds*1000*shift)
-
-					rrdPtr.CurrentStep -= shift
-					if debug { fmt.Printf("%schanged currentStep: %i%s\n", ccRed, rrdPtr.CurrentStep, ccReset) }
+					// set FirstUpdateTs based on shift
+					*rrdPtr.FirstUpdateTs = *rrdPtr.FirstUpdateTs + (intervalSeconds * 1000 * shift)
 
 				}
 			}
 
-			if (rrdPtr.CurrentStep+1 == totalSteps) {
-				// this is needed after a shift of more than 1 but less than totalSteps
-				// in case there is an update which is beyond the last when calculated against a new firstUpdateTs that may be milliseconds beyond the previous firstUpdateTs
-				rrdPtr.CurrentStep--
-			}
-
 			if (rrdPtr.CurrentStep == 0) {
-				// there was a buffer calculation that was too greedy and put a new update in the first step
-				// which is impossible for a new step, make the current step 1
+				// CurrentStep 0 is only used during the first update
 				rrdPtr.CurrentStep = 1
 			}
 
