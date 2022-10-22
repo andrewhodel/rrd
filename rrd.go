@@ -258,7 +258,7 @@ func Update(dbg bool, intervalSeconds int64, totalSteps int64, dataType string, 
 		if debug { fmt.Println("currentTimeSlot: " + strconv.FormatInt(currentTimeSlot, 10)) }
 
 		// now check if this update is in the current time slot or a newer one
-		if (updateTimeStamp >= timeSteps[rrdPtr.CurrentStep+1]) {
+		if (updateTimeStamp >= timeSteps[rrdPtr.CurrentStep]) {
 			// this update is in a new time slot
 			if debug { fmt.Println(ccBlue + "##### NEW STEP ##### this update is in a new step" + ccReset) }
 
