@@ -159,7 +159,7 @@ func Update(dbg bool, intervalSeconds int64, totalSteps int64, dataType string, 
 	//
 	// returns json object with update added
 
-	if debug { fmt.Println("\n" + ccRed + "### GOT NEW " + dataType + " UPDATE ###" + ccReset) }
+	if debug { fmt.Println("\n" + ccRed + "### NEW " + dataType + " UPDATE ###" + ccReset) }
 	if debug { fmt.Println("intervalSeconds: " + strconv.FormatInt(intervalSeconds, 10)) }
 	if debug { fmt.Println("totalSteps: " + strconv.FormatInt(totalSteps, 10)) }
 	if debug { fmt.Println("firstUpdateTs: " + strconv.FormatInt(*rrdPtr.FirstUpdateTs, 10)) }
