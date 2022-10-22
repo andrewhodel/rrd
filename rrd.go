@@ -36,7 +36,7 @@ type Rrd struct {
 	//RR			[][]big.Float	`bson:"rr" json:"rr"`
 	CurrentStep		int64		`bson:"currentStep" json:"currentStep"`
 	CurrentAvgCount		int64		`bson:"currentAvgCount" json:"currentAvgCount"`
-	// use a pointer for FirstUpdateTs so nil values are possible
+	// use a pointer for FirstUpdateTs to allow nil values
 	FirstUpdateTs		*int64		`bson:"firstUpdateTs" json:"firstUpdateTs"`
 	LastUpdateDataPoint	[]float64	`bson:"lastUpdateDataPoint" json:"lastUpdateDataPoint"`
 	MinimumDataPoints	uint64		`bson:"minimumDataPoints" json:"minimumDataPoints"`
@@ -79,12 +79,16 @@ func Dump(rrdPtr *Rrd) {
 
 }
 
-func Update(intervalSeconds int64, totalSteps int64, dataType string, updateDataPoint []float64, rrdPtr *Rrd) {
+func Update(dbg bool, intervalSeconds int64, totalSteps int64, dataType string, updateDataPoint []float64, rrdPtr *Rrd) {
 	// all timing is based on system time at execution of Update()
 	// data can be sent without knowledge of time on the distant side, as if you were receiving data from an unknown source or distant planet
 	// world internet latency via fiber could be more than 200ms and much longer in space
 
 	var debug = false
+	if (dbg == true) {
+		// debug for this Update only if specified
+		debug = true
+	}
 
 	if (updateDataPoint == nil) {
 		return
@@ -159,6 +163,9 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 	if debug { fmt.Println("\n" + ccRed + "### GOT NEW " + dataType + " UPDATE ###" + ccReset) }
 	if debug { fmt.Println("intervalSeconds: " + strconv.FormatInt(intervalSeconds, 10)) }
 	if debug { fmt.Println("totalSteps: " + strconv.FormatInt(totalSteps, 10)) }
+	if debug { fmt.Println("firstUpdateTs: " + strconv.FormatInt(*rrdPtr.FirstUpdateTs, 10)) }
+	if debug { fmt.Println("first update, total hours ago: " + strconv.FormatInt((updateTimeStamp - *rrdPtr.FirstUpdateTs) / 1000 / 60 / 60, 10)) }
+	if debug { fmt.Println("first update, total minutes ago: " + strconv.FormatInt((updateTimeStamp - *rrdPtr.FirstUpdateTs) / 1000 / 60, 10)) }
 	if debug { fmt.Println("updateTimeStamp: " + strconv.FormatInt(updateTimeStamp, 10)) }
 	if debug { fmt.Println("updateDataPoint:") }
 
@@ -175,7 +182,7 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 		// then it is an entirely new chart
 		if (updateTimeStamp >= *rrdPtr.FirstUpdateTs+(totalSteps*2*intervalSeconds*1000)) {
 			// set firstUpdateTs to nil, this will be considered the first update
-			if debug { fmt.Println(ccBlue + "### THIS UPDATE IS SO MUCH NEWER THAN THE EXISTING DATA THAT IT REPLACES IT ###" + ccReset) }
+			if debug { fmt.Println(ccBlue + "### THIS UPDATE IS NEW ENOUGH TO REPLACE ALL THE DATA ###" + ccReset) }
 			rrdPtr.FirstUpdateTs = nil
 
 			// reset all the data
@@ -267,6 +274,7 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 					// this update needs to shift by more than 1 but obviously not more than the entire data set length
 					// because if that were true, the data would have already been reset
 					var time_diff int64 = updateTimeStamp - (*rrdPtr.FirstUpdateTs+(totalSteps*intervalSeconds*1000))
+					if debug { fmt.Println("time_diff in ms", time_diff) }
 					// shift by the number of steps beyond the last considering the original firstUpdateTs
 					shift = (time_diff / (intervalSeconds * 1000)) - 1
 				}
@@ -374,7 +382,7 @@ func Update(intervalSeconds int64, totalSteps int64, dataType string, updateData
 							fmt.Printf("Previous interval is nil\n")
 						}
 
-						// only insert the data, there is no previous interval data so no rate can be calculated
+						// only insert the data, there is no previous interval data to calculate a rate with
 						rrdPtr.D[rrdPtr.CurrentStep] = append(rrdPtr.D[rrdPtr.CurrentStep], updateDataPoint[e])
 
 						continue
