@@ -157,7 +157,7 @@ func Update(dbg bool, intervalSeconds int64, totalSteps int64, dataType string, 
 	// updateDataPoint - data object for this update
 	// rrdPtr - data from previous updates
 	//
-	// returns json object with update added
+	// returns rrd.Rrd with update added
 
 	if debug { fmt.Println("\n" + ccRed + "### NEW " + dataType + " UPDATE ###" + ccReset) }
 	if debug { fmt.Println("intervalSeconds: " + strconv.FormatInt(intervalSeconds, 10)) }
