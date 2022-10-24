@@ -284,6 +284,8 @@ func Update(dbg bool, intervalSeconds int64, totalSteps int64, dataType string, 
 			// set firstUpdateTs to nil, this will be considered the first update
 			if debug { fmt.Println(ccBlue + "### THIS UPDATE IS NEW ENOUGH TO REPLACE ALL THE DATA ###" + ccReset) }
 			rrdPtr.FirstUpdateTs = nil
+			rrdPtr.FirstUpdateTs = new(int64)
+			rrdPtr.FirstUpdateTs = &updateTimeStamp
 
 			// reset all the data
 			if (dataType == "COUNTER") {
