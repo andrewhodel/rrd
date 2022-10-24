@@ -308,7 +308,7 @@ func Update(dbg bool, intervalSeconds int64, totalSteps int64, dataType string, 
 
 							if (int64(e) >= shift) {
 								// add data points before shift, at their original position - shift
-								temp[e - int(shift)] = rrdPtr.D[e]
+								temp[e - int(shift)] = rrdPtr.R[e]
 							}
 
 						}
