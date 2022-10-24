@@ -71,7 +71,7 @@ func main() {
 
 		}
 
-		rrd.Update(8, 10, "COUNTER", if_counter, &rrdPtr)
+		rrd.Update(true, 8, 10, "COUNTER", if_counter, &rrdPtr)
 
 		rrd.Dump(&rrdPtr)
 

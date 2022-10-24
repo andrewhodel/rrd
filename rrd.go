@@ -162,9 +162,11 @@ func Update(dbg bool, intervalSeconds int64, totalSteps int64, dataType string, 
 	if debug { fmt.Println("\n" + ccRed + "### NEW " + dataType + " UPDATE ###" + ccReset) }
 	if debug { fmt.Println("intervalSeconds: " + strconv.FormatInt(intervalSeconds, 10)) }
 	if debug { fmt.Println("totalSteps: " + strconv.FormatInt(totalSteps, 10)) }
-	if debug { fmt.Println("firstUpdateTs: " + strconv.FormatInt(*rrdPtr.FirstUpdateTs, 10)) }
-	if debug { fmt.Println("first update, total hours ago: " + strconv.FormatInt((updateTimeStamp - *rrdPtr.FirstUpdateTs) / 1000 / 60 / 60, 10)) }
-	if debug { fmt.Println("first update, total minutes ago: " + strconv.FormatInt((updateTimeStamp - *rrdPtr.FirstUpdateTs) / 1000 / 60, 10)) }
+	if (rrdPtr.FirstUpdateTs != nil) {
+		if debug { fmt.Println("firstUpdateTs: " + strconv.FormatInt(*rrdPtr.FirstUpdateTs, 10)) }
+		if debug { fmt.Println("first update, total hours ago: " + strconv.FormatInt((updateTimeStamp - *rrdPtr.FirstUpdateTs) / 1000 / 60 / 60, 10)) }
+		if debug { fmt.Println("first update, total minutes ago: " + strconv.FormatInt((updateTimeStamp - *rrdPtr.FirstUpdateTs) / 1000 / 60, 10)) }
+	}
 	if debug { fmt.Println("updateTimeStamp: " + strconv.FormatInt(updateTimeStamp, 10)) }
 	if debug { fmt.Println("updateDataPoint:") }
 
@@ -175,28 +177,6 @@ func Update(dbg bool, intervalSeconds int64, totalSteps int64, dataType string, 
 
 	// store updateDataPoint array as lastUpdateDataPoint
 	rrdPtr.LastUpdateDataPoint = updateDataPoint
-
-	if (rrdPtr.FirstUpdateTs != nil) {
-		// if the updateTimeStamp is farther away than firstUpdateTs+(totalSteps*intervalSeconds*1000)
-		// then it is an entirely new chart
-		if (updateTimeStamp >= *rrdPtr.FirstUpdateTs+(totalSteps*2*intervalSeconds*1000)) {
-			// set firstUpdateTs to nil, this will be considered the first update
-			if debug { fmt.Println(ccBlue + "### THIS UPDATE IS NEW ENOUGH TO REPLACE ALL THE DATA ###" + ccReset) }
-			rrdPtr.FirstUpdateTs = nil
-
-			// reset all the data
-			if (dataType == "COUNTER") {
-				// counter types need a rate calculation
-				rrdPtr.R = nil
-				rrdPtr.R = make([][]float64, totalSteps)
-			}
-
-			rrdPtr.D = nil
-			rrdPtr.D = make([][]float64, totalSteps)
-			rrdPtr.CurrentStep = 0
-
-		}
-	}
 
 	// first need to see if this is the first update or not
 	if (rrdPtr.FirstUpdateTs == nil) {
@@ -221,6 +201,26 @@ func Update(dbg bool, intervalSeconds int64, totalSteps int64, dataType string, 
 		rrdPtr.FirstUpdateTs = &updateTimeStamp
 
 	} else {
+
+		// if the updateTimeStamp is farther away than firstUpdateTs+(totalSteps*intervalSeconds*1000)
+		// then it is an entirely new chart
+		if (updateTimeStamp >= *rrdPtr.FirstUpdateTs+(totalSteps*2*intervalSeconds*1000)) {
+			// set firstUpdateTs to nil, this will be considered the first update
+			if debug { fmt.Println(ccBlue + "### THIS UPDATE IS NEW ENOUGH TO REPLACE ALL THE DATA ###" + ccReset) }
+			rrdPtr.FirstUpdateTs = nil
+
+			// reset all the data
+			if (dataType == "COUNTER") {
+				// counter types need a rate calculation
+				rrdPtr.R = nil
+				rrdPtr.R = make([][]float64, totalSteps)
+			}
+
+			rrdPtr.D = nil
+			rrdPtr.D = make([][]float64, totalSteps)
+			rrdPtr.CurrentStep = 0
+
+		}
 
 		// this is not the first update
 		if debug { fmt.Println(ccBlue + "### PROCESSING " + dataType + " UPDATE ###" + ccReset) }
