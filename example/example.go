@@ -23,10 +23,20 @@ func main() {
 
 	for (true) {
 
+		fmt.Println("\nupdate number", update_count)
+
 		if (update_count == 5) {
 			// simulate missed updates
 			fmt.Printf("simulating 12 seconds of missed updates\n")
 			time.Sleep(12 * time.Second)
+			update_count += 1
+			continue
+		}
+
+		if (update_count == 15) {
+			// perform a recalculate of the rates
+			fmt.Printf("recalculating rates")
+			rrd.RecalculateRate(8, 10, &rrdPtr)
 			update_count += 1
 			continue
 		}

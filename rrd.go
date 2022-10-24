@@ -79,6 +79,82 @@ func Dump(rrdPtr *Rrd) {
 
 }
 
+func RecalculateRate(intervalSeconds int64, totalSteps int64, rrdPtr *Rrd) {
+
+	// recalculate the rate values if the R array exists
+
+	if (rrdPtr.R != nil) {
+
+		// for each data point
+		for e := range rrdPtr.R {
+
+			// reset the rate values
+			rrdPtr.R[e] = nil
+
+			if (e == 0) {
+				// skip the first point set, there is nothing to calculate the rate against
+				continue
+			}
+
+			if (rrdPtr.D[e-1] == nil) {
+
+				// the previous point set has no data
+				// go to the next
+				continue
+
+			}
+
+			for l := range rrdPtr.D[e] {
+
+				var previousPoint = rrdPtr.D[e-1][l]
+				var currentPoint = rrdPtr.D[e][l]
+
+				// get the value of the interval
+				var intervalValue float64 = currentPoint - previousPoint
+
+				// check for a counter reset
+				// known by this update value being less than the previous
+				if (previousPoint > currentPoint) {
+
+					// the counter has reset, need to check if this happened near the 32 or 64 bit limit
+
+					if (previousPoint < math.MaxUint32 && previousPoint > math.MaxUint32 * .7) {
+
+						// the last update was between 70% and 100% of the 32 bit uint limit
+						// make 32bit adjustments
+
+						// add the remainder of subtracting the last data point from the 32 bit limit to the currentPoint
+						// use it for rate calculation
+						intervalValue = currentPoint + math.MaxUint32 - previousPoint
+
+					} else if (previousPoint < math.MaxUint64 && previousPoint > math.MaxUint64 * .7) {
+
+						// the rrd struct number types are currently Float64 (with a limit less than Uint64)
+						// this rrd library must be upgraded to use math/big floats anyway
+
+						// the last update was between 70% and 100% of the 64 bit uint limit
+						// make 64bit adjustments
+
+						// add the remainder of subtracting the last data point from the 64 bit limit to the currentPoint
+						// use it for rate calculation
+						intervalValue = currentPoint + math.MaxUint64 - previousPoint
+
+					}
+
+				}
+
+				var rate float64 = intervalValue / float64(intervalSeconds)
+
+				rrdPtr.R[e] = append(rrdPtr.R[e], rate)
+
+			}
+
+		}
+
+	}
+
+}
+
 func Update(dbg bool, intervalSeconds int64, totalSteps int64, dataType string, updateDataPoint []float64, rrdPtr *Rrd) {
 	// all timing is based on system time at execution of Update()
 	// data can be sent from any time zone, even ones you don't know about yet
@@ -398,12 +474,6 @@ func Update(dbg bool, intervalSeconds int64, totalSteps int64, dataType string, 
 							// add the remainder of subtracting the last data point from the 64 bit limit to the updateDataPoint
 							// use it for rate calculation
 							intervalValue = updateDataPoint[e] + math.MaxUint64 - rrdPtr.D[rrdPtr.CurrentStep-1][e]
-
-						} else {
-
-							// use the update value as intervalValue, showing the rate calculated as the last update being 0
-							// because the reset wasn't in a valid range for a counter data type maximum
-							intervalValue = updateDataPoint[e]
 
 						}
 
