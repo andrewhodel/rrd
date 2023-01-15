@@ -8,7 +8,9 @@ https://www.youtube.com/watch?v=rWf1zqOcAag
 
 Installation
 ======
-go get github.com/andrewhodel/rrd
+`GO111MODULE=off go get github.com/andrewhodel/rrd`
+
+Run your Go program with `GO111MODULE=off go run program.go`
 
 Example
 ======
