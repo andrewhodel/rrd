@@ -279,8 +279,9 @@ func Update(dbg bool, intervalSeconds int64, totalSteps int64, dataType string, 
 	} else {
 
 		// if the updateTimeStamp is farther away than firstUpdateTs+(totalSteps*intervalSeconds*1000)
-		// then it is an entirely new chart
-		if (updateTimeStamp >= *(*rrdPtr).FirstUpdateTs+(totalSteps*2*intervalSeconds*1000)) {
+		// or .D has a length of 0
+		// it is a new chart
+		if (updateTimeStamp >= *(*rrdPtr).FirstUpdateTs+(totalSteps*2*intervalSeconds*1000) || len((*rrdPtr).D) == 0) {
 			// set firstUpdateTs to nil, this will be considered the first update
 			if debug { fmt.Println(ccBlue + "### THIS UPDATE IS NEW ENOUGH TO REPLACE ALL THE DATA ###" + ccReset) }
 			(*rrdPtr).FirstUpdateTs = nil
