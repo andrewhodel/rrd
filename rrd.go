@@ -500,9 +500,9 @@ func Update(dbg bool, intervalSeconds int64, totalSteps int64, dataType string, 
 				if debug { fmt.Println("unsupported dataType " + dataType) }
 			}
 
-		} else {
+		} else if (len((*rrdPtr).D[(*rrdPtr).CurrentStep]) == len(updateDataPoint)) {
 
-			// being here means that this update is in the same step group as the previous
+			// this update is in the same step group as the previous
 			if debug { fmt.Println("##### SAME STEP ##### this update is in the same step as the previous") }
 
 			// handle different dataType
