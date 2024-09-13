@@ -227,8 +227,8 @@ func Update(dbg bool, intervalSeconds int64, totalSteps int64, dataType string, 
 	// intervalSeconds - time between updates
 	// totalSteps - total steps of data
 	// dataType - GAUGE or COUNTER
-	//  GAUGE - things that have no limits, like the value of raw materials
-	//  COUNTER - things that count up, if get a value that's less than last time it means it reset... stored as a per second rate
+	//  GAUGE - values that stay within the range of defined integer types, like the value of raw materials.
+	//  COUNTER - values that count and can exceed the maximum of a defined integer type.
 	// updateTimeStamp - unix epoch timestamp of this update
 	// updateDataPoint - data object for this update
 	// rrdPtr - data from previous updates

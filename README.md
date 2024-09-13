@@ -43,8 +43,8 @@ Updates an Rrd struct via a pointer.
 * totalSteps			total steps of data
 * dataType			GAUGE or COUNTER
 <pre>
-    GAUGE - things that have no limits, like the value of raw materials
-    COUNTER - things that count up, if we get a value that's less than last time it means it reset... stored as a per second rate
+    GAUGE - values that stay within the range of defined integer types, like the value of raw materials.
+    COUNTER - values that count and can exceed the maximum of a defined integer type.
 </pre>
 * updateDataPoint[]		array of data points for the update, you must maintain the same order on following Update()'s
 * rrdPtr			pointer to an rrd.Rrd struct
