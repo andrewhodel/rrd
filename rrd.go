@@ -223,8 +223,8 @@ func Update(dbg bool, intervalSeconds int64, totalSteps int64, dataType string, 
 
 	// intervalSeconds - time between updates
 	// totalSteps - total steps of data
-	// dataType - GAUGE or COUNTER
-	//  GAUGE - values that stay within the range of defined integer types, like the value of raw materials.
+	// dataType - GUAGE or COUNTER
+	//  GUAGE - values that stay within the range of defined integer types, like the value of raw materials.
 	//  COUNTER - values that count and can exceed the maximum of a defined integer type.
 	// updateTimeStamp - unix epoch timestamp of this update
 	// updateDataPoint - data object for this update
@@ -401,7 +401,7 @@ func Update(dbg bool, intervalSeconds int64, totalSteps int64, dataType string, 
 
 			// handle different dataType
 			// this is normal processing for an update, assuming there was no previous data missing
-			if (dataType == "GAUGE") {
+			if (dataType == "GUAGE") {
 
 				// insert the data for each data point
 				for e := range updateDataPoint {
@@ -485,7 +485,7 @@ func Update(dbg bool, intervalSeconds int64, totalSteps int64, dataType string, 
 			if debug { fmt.Println("##### SAME STEP ##### this update is in the same step as the previous") }
 
 			// handle different dataType
-			if (dataType == "GAUGE") {
+			if (dataType == "GUAGE") {
 				// this update needs to be averaged with the data in this step
 
 				// need to do this for each data point
