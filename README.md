@@ -41,9 +41,9 @@ Updates an Rrd struct via a pointer.
 
 * intervalSeconds		time between updates
 * totalSteps			total steps of data
-* dataType			GUAGE or COUNTER
+* dataType			GAUGE or COUNTER
 <pre>
-    GUAGE - values that stay within the range of defined integer types, like the value of raw materials.
+    GAUGE - values that stay within the range of defined integer types, like the value of raw materials.
     COUNTER - values that count and can exceed the maximum of a defined integer type.
 </pre>
 * updateDataPoint[]		array of data points for the update, you must maintain the same order on following Update()'s
@@ -51,13 +51,13 @@ Updates an Rrd struct via a pointer.
 
 <pre>
 //24 hours with 5 minute interval
-rrd.Update(5*60, 24*60/5, 'GUAGE', []float64 {34, 100}, &rrdPtr);
+rrd.Update(5*60, 24*60/5, 'GAUGE', []float64 {34, 100}, &rrdPtr);
 
 //30 days with 1 hour interval
-rrd.Update(60*60, 30*24, 'GUAGE', []float64 {34, 100}, &rrdPtr);
+rrd.Update(60*60, 30*24, 'GAUGE', []float64 {34, 100}, &rrdPtr);
 
 //365 days with 1 day interval
-rrd.Update(24*60*60, 365*24, 'GUAGE', []float64 {34, 100}, &rrdPtr);
+rrd.Update(24*60*60, 365*24, 'GAUGE', []float64 {34, 100}, &rrdPtr);
 </pre>
 
 __rrd.Dump(rrdPtr *Rrd)__
