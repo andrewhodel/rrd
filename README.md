@@ -8,22 +8,19 @@ https://www.youtube.com/watch?v=rWf1zqOcAag
 
 Installation
 ======
-`GO111MODULE=off go get github.com/andrewhodel/rrd`
-
-Run your Go program with `GO111MODULE=off go run program.go`
+`go get github.com/andrewhodel/rrd`
 
 Example
 ======
 
-On a linux system you can run example/example.go which provides a simple example of collecting and displaying
-traffic statistics for an interface using a COUNTER
+On a linux system you can run example/example.go which provides a simple example that shows network interface traffic statistics.
 
 Documentation
 =============
 
 __rrd.Rrd__
 
-<pre>
+```go
 type Rrd struct {
 	D			[][]float64	`json:"d"`
 	R			[][]float64	`json:"r"`
@@ -32,48 +29,70 @@ type Rrd struct {
 	FirstUpdateTs		*int64		`json:"firstUpdateTs"`
 	LastUpdateDataPoint	[]float64	`json:"lastUpdateDataPoint"`
 }
-</pre>
-
+```
 
 __rrd.Update(intervalSeconds int64, totalSteps int64, dataType string, updateDataPoint []float64, rrdPtr *Rrd)__
 
 Updates an Rrd struct via a pointer.
 
-* intervalSeconds		time between updates
-* totalSteps			total steps of data
-* dataType			GAUGE or COUNTER
-<pre>
-    GAUGE - values that stay within the range of defined integer types, like the value of raw materials.
-    COUNTER - values that count and can exceed the maximum of a defined integer type.
-</pre>
-* updateDataPoint[]		array of data points for the update, you must maintain the same order on following Update()'s
-* rrdPtr			pointer to an rrd.Rrd struct
+```go
+debug					bool			output debug to console
+intervalSeconds			int64			time between updates
+totalSteps				int64			total steps of data
+dataType				string			GAUGE or COUNTER
+	GAUGE - values that stay within the range of defined integer types, like the value of raw materials.
+	COUNTER - values that count and can exceed the maximum of a defined integer type.
+updateDataPoint			[]float64		array of data points for the update, must have the same order in following `Update`s.
+rrdPtr					*Rrd			pointer to an rrd.Rrd struct
+```
 
-<pre>
-//24 hours with 5 minute interval
-rrd.Update(5*60, 24*60/5, 'GAUGE', []float64 {34, 100}, &rrdPtr);
+```go
+var rrdPtr Rrd
 
-//30 days with 1 hour interval
-rrd.Update(60*60, 30*24, 'GAUGE', []float64 {34, 100}, &rrdPtr);
+// 24 hours with 5 minute interval
+rrd.Update(false, 5*60, 24*60/5, "GAUGE", []float64 {434, 700}, &rrdPtr)
+```
 
-//365 days with 1 day interval
-rrd.Update(24*60*60, 365*24, 'GAUGE', []float64 {34, 100}, &rrdPtr);
-</pre>
+```go
+var rrdPtr Rrd
+
+// 30 days with 1 hour interval
+rrd.Update(false, 60*60, 30*24, "GAUGE", []float64 {434, 700}, &rrdPtr)
+```
+
+```go
+var rrdPtr Rrd
+
+// 365 days with 1 day interval
+rrd.Update(false, 24*60*60, 365*24, "GAUGE", []float64 {434, 700}, &rrdPtr)
+```
+
+```go
+var rrdPtr Rrd
+
+// 20 seconds with a 1 second interval
+rrd.Update(false, 1, 20, "COUNTER", []float64 {40}, &rrdPtr)
+
+// get average of all data
+// try it with /proc/diskstats field 8 (writes completed)
+var avg = rrd.Avg(&rrdPtr, 0)
+```
 
 __rrd.Dump(rrdPtr *Rrd)__
 
 Print the Rrd to the screen in a readable format.
 
-Patterns
+Pattern/Sequence/Routine/Design/Order/Arrangement/Model/Structure Matching
 ========
 
-The pattern gathering and detection work is in patterns/patterns.go.
+Read `patterns/patterns.go`.
 
 License
 =======
 
-Copyright 2022 Andrew Hodel
+Copyright 2026 Andrew Hodel
 	andrewhodel@gmail.com
+	andrew@xyzbots.com
 
 LICENSE MIT
 

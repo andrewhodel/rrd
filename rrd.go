@@ -1,7 +1,8 @@
 /*
 
-Copyright 2022 Andrew Hodel
+Copyright 2026 Andrew Hodel
 	andrewhodel@gmail.com
+	andrew@xyzbots.com
 
 LICENSE MIT
 
@@ -24,9 +25,9 @@ import (
 
 const (
 	// color codes
-	ccRed = "\033[31m"
-	ccBlue = "\033[34m"
-	ccReset = "\033[0m"
+	colorCodeRed = "\033[31m"
+	colorCodeBlue = "\033[34m"
+	colorCodeReset = "\033[0m"
 )
 
 type Rrd struct {
@@ -37,6 +38,43 @@ type Rrd struct {
 	FirstUpdateTs		*int64		`bson:"firstUpdateTs" json:"firstUpdateTs"`
 	LastUpdateDataPoint	[]float64	`bson:"lastUpdateDataPoint" json:"lastUpdateDataPoint"`
 	MinimumDataPoints	uint64		`bson:"minimumDataPoints" json:"minimumDataPoints"`
+}
+
+func Avg(rrdPtr *Rrd, index int) (float64) {
+
+	// return the average of all the values in the Rrd at index
+
+	var avg float64
+	var count uint64
+
+	if ((*rrdPtr).R != nil) {
+
+		// this is a GAUGE rrd
+
+		for e := range (*rrdPtr).R {
+			for n := range (*rrdPtr).R[e] {
+				avg += (*rrdPtr).R[e][n]
+				count += 1
+			}
+		}
+
+	} else {
+
+		// this is a COUNTER rrd
+
+		for e := range (*rrdPtr).D {
+			for n := range (*rrdPtr).D[e] {
+				avg += (*rrdPtr).D[e][n]
+				count += 1
+			}
+		}
+
+	}
+
+	avg = avg / float64(count)
+
+	return avg
+
 }
 
 func Dump(rrdPtr *Rrd) {
@@ -232,7 +270,7 @@ func Update(dbg bool, intervalSeconds int64, totalSteps int64, dataType string, 
 	//
 	// returns rrd.Rrd with update added
 
-	if debug { fmt.Println("\n" + ccRed + "### NEW " + dataType + " UPDATE ###" + ccReset) }
+	if debug { fmt.Println("\n" + colorCodeRed + "### NEW " + dataType + " UPDATE ###" + colorCodeReset) }
 	if debug { fmt.Println("intervalSeconds: " + strconv.FormatInt(intervalSeconds, 10)) }
 	if debug { fmt.Println("totalSteps: " + strconv.FormatInt(totalSteps, 10)) }
 	if ((*rrdPtr).FirstUpdateTs != nil) {
@@ -255,7 +293,7 @@ func Update(dbg bool, intervalSeconds int64, totalSteps int64, dataType string, 
 	// first need to see if this is the first update or not
 	if ((*rrdPtr).FirstUpdateTs == nil) {
 		// this is the first update
-		if debug { fmt.Println(ccBlue + "### INSERTING FIRST UPDATE ###" + ccReset) }
+		if debug { fmt.Println(colorCodeBlue + "### INSERTING FIRST UPDATE ###" + colorCodeReset) }
 
 		// create the array of data points
 		(*rrdPtr).D = make([][]float64, totalSteps)
@@ -281,7 +319,7 @@ func Update(dbg bool, intervalSeconds int64, totalSteps int64, dataType string, 
 		// it is a new chart
 		if (updateTimeStamp >= *(*rrdPtr).FirstUpdateTs+(totalSteps*2*intervalSeconds*1000) || len((*rrdPtr).D) == 0) {
 			// set firstUpdateTs to nil, this will be considered the first update
-			if debug { fmt.Println(ccBlue + "### THIS UPDATE IS NEW ENOUGH TO REPLACE ALL THE DATA ###" + ccReset) }
+			if debug { fmt.Println(colorCodeBlue + "### THIS UPDATE IS NEW ENOUGH TO REPLACE ALL THE DATA ###" + colorCodeReset) }
 			(*rrdPtr).FirstUpdateTs = nil
 			(*rrdPtr).FirstUpdateTs = new(int64)
 			(*rrdPtr).FirstUpdateTs = &updateTimeStamp
@@ -299,7 +337,7 @@ func Update(dbg bool, intervalSeconds int64, totalSteps int64, dataType string, 
 		}
 
 		// this is not the first update
-		if debug { fmt.Println(ccBlue + "### PROCESSING " + dataType + " UPDATE ###" + ccReset) }
+		if debug { fmt.Println(colorCodeBlue + "### PROCESSING " + dataType + " UPDATE ###" + colorCodeReset) }
 
 		// this timestamp
 		if debug { fmt.Println("updateTimeStamp: " + strconv.FormatInt(updateTimeStamp, 10)) }
@@ -325,7 +363,7 @@ func Update(dbg bool, intervalSeconds int64, totalSteps int64, dataType string, 
 		if (updateTimeStamp >= timeSteps[currentStep] && currentStep != 0) {
 			// this update is in a new time slot
 			// and it is not the first time slot (multiple updates can happen in the first time slot)
-			if debug { fmt.Println(ccBlue + "##### NEW STEP ##### this update is in a new step" + ccReset) }
+			if debug { fmt.Println(colorCodeBlue + "##### NEW STEP ##### this update is in a new step" + colorCodeReset) }
 
 			// shift the data set
 			if (currentStep == totalSteps - 1) {
@@ -343,7 +381,7 @@ func Update(dbg bool, intervalSeconds int64, totalSteps int64, dataType string, 
 					shift = (time_diff / (intervalSeconds * 1000)) - 1
 				}
 
-				if debug { fmt.Println(ccRed + "shifting data set by: " + strconv.FormatInt(shift, 10) + ccReset) }
+				if debug { fmt.Println(colorCodeRed + "shifting data set by: " + strconv.FormatInt(shift, 10) + colorCodeReset) }
 
 				if (shift > 0) {
 
@@ -391,7 +429,7 @@ func Update(dbg bool, intervalSeconds int64, totalSteps int64, dataType string, 
 				}
 			}
 
-			if debug { fmt.Println(ccBlue + "inserting data at: " + strconv.FormatInt(currentStep, 10) + ccReset) }
+			if debug { fmt.Println(colorCodeBlue + "inserting data at: " + strconv.FormatInt(currentStep, 10) + colorCodeReset) }
 
 			// remove any data in this step because this is a NEW STEP
 			(*rrdPtr).D[currentStep] = nil
@@ -438,7 +476,7 @@ func Update(dbg bool, intervalSeconds int64, totalSteps int64, dataType string, 
 					if ((*rrdPtr).D[currentStep-1][e] > updateDataPoint[e]) {
 
 						// the counter has reset, need to check if this happened near the 32 or 64 bit limit
-						if debug { fmt.Println(ccBlue + "counter reset" + ccReset) }
+						if debug { fmt.Println(colorCodeBlue + "counter reset" + colorCodeReset) }
 
 						if ((*rrdPtr).D[currentStep-1][e] < math.MaxUint32 && (*rrdPtr).D[currentStep-1][e] > math.MaxUint32 * .7) {
 
