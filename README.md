@@ -83,6 +83,12 @@ var avg = rrd.Avg(&rrdPtr, 0)
 
 The rates are stored as a `float64` with a 1 second interval, providing nanosecond resolution.
 
+# Mutex
+
+Use `sync.RWMutex` to write to the rrd with `rrd.Update` in `Lock` and read in `RLock`.
+
+`DebugMutex` from https://gist.github.com/andrewhodel/ed7625a14eb87404cafd37493849d1ba is helpful.
+
 __rrd.Dump(rrdPtr *Rrd)__
 
 Print the Rrd to the screen in a readable format.

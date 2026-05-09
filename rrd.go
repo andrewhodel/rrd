@@ -414,6 +414,7 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType strin
 					*(*rrdPtr).FirstUpdateTs = (*(*rrdPtr).FirstUpdateTs).Add(interval * time.Duration(shift))
 
 				}
+
 			}
 
 			if debug { fmt.Println(colorCodeBlue + "inserting data at: " + strconv.FormatInt(currentStep, 10) + colorCodeReset) }
