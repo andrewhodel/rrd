@@ -7,6 +7,7 @@ import (
 	"github.com/andrewhodel/rrd"
 	"io/ioutil"
 	"strings"
+	"slices"
 )
 
 func check(e error) {
@@ -48,6 +49,21 @@ func main() {
 
 		s := strings.Split(string(dat), "\n")
 
+		slices.SortFunc(s, func(a, b string) (int) {
+
+			n := strings.Fields(a)
+
+			if (len(n) < 1) {
+				return 1
+			}
+
+			if (strings.Index(n[0], "enp") != -1 || strings.Index(n[0], "eth") != -1 || strings.Index(n[0], "wlan") != -1) {
+				return -1
+			}
+
+			return 1
+		})
+
 		var if_counter = []float64 {0, 0}
 
 		for e := range s {
@@ -59,6 +75,7 @@ func main() {
 			}
 
 			if (strings.Index(n[0], "enp") != -1 || strings.Index(n[0], "eth") != -1 || strings.Index(n[0], "wlan") != -1 || strings.Index(n[0], "wlp") != -1 || strings.Index(n[0], "lo") != -1) {
+
 				// bytes in
 				b_in, err := strconv.Atoi(n[1])
 				check(err)
@@ -81,7 +98,7 @@ func main() {
 
 		}
 
-		rrd.Update(true, 8, 10, "COUNTER", if_counter, &rrdPtr)
+		rrd.Update(true, time.Second * 8, 10, "COUNTER", if_counter, &rrdPtr)
 
 		rrd.Dump(&rrdPtr)
 

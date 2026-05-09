@@ -37,7 +37,7 @@ Updates an Rrd struct via a pointer.
 
 ```go
 debug					bool			output debug to console
-intervalSeconds			int64			time between updates
+interval				int64			ideal time between updates
 totalSteps				int64			total steps of data
 dataType				string			GAUGE or COUNTER
 	GAUGE - values that stay within the range of defined integer types, like the value of raw materials.
@@ -49,34 +49,39 @@ rrdPtr					*Rrd			pointer to an rrd.Rrd struct
 ```go
 var rrdPtr Rrd
 
-// 24 hours with 5 minute interval
-rrd.Update(false, 5*60, 24*60/5, "GAUGE", []float64 {434, 700}, &rrdPtr)
+// 24 hours with 5 minute interval (24 * 60 / 5 samples)
+rrd.Update(false, time.Minute * 5, 24*60/5, "GAUGE", []float64 {434, 700}, &rrdPtr)
 ```
 
 ```go
 var rrdPtr Rrd
 
-// 30 days with 1 hour interval
-rrd.Update(false, 60*60, 30*24, "GAUGE", []float64 {434, 700}, &rrdPtr)
+// 30 days with 1 hour interval (30 * 24 samples)
+rrd.Update(false, time.Hour, 30*24, "GAUGE", []float64 {434, 700}, &rrdPtr)
 ```
 
 ```go
 var rrdPtr Rrd
 
-// 365 days with 1 day interval
-rrd.Update(false, 24*60*60, 365*24, "GAUGE", []float64 {434, 700}, &rrdPtr)
+// 365 days with 1 day interval (365 samples)
+rrd.Update(false, time.Hour * 24, 365, "GAUGE", []float64 {434, 700}, &rrdPtr)
 ```
 
 ```go
 var rrdPtr Rrd
 
-// 20 seconds with a 1 second interval
-rrd.Update(false, 1, 20, "COUNTER", []float64 {40}, &rrdPtr)
+// 5 seconds with a 1 second interval (5 samples)
+rrd.Update(false, time.Second, 5, "COUNTER", []float64 {40}, &rrdPtr)
 
 // get average of all data
 // try it with /proc/diskstats field 8 (writes completed)
+// this is the rate per second of writes completed averaged through the last 5 seconds
 var avg = rrd.Avg(&rrdPtr, 0)
 ```
+
+# Rate Interval
+
+The rates are stored as a `float64` with a 1 second interval, providing nanosecond resolution.
 
 __rrd.Dump(rrdPtr *Rrd)__
 
