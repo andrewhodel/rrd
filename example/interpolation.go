@@ -34,7 +34,7 @@ func main() {
 	// interpolate (Input: 70MB/s (sectors written per second + sectors read per second with 512 byte sectors) to the range of a SATA 7200's performance (BaseRange: 0 MB/s to 120 MB/s)
 	// to the range of the desired network rate (OutputRange: 1000mbps to 0mbps)
 	var interp1 rrd.Interpolation
-	interp1.BaseRange = []float64{0, 450}
+	interp1.BaseRange = []float64{0, 120}
 	interp1.OutputRange = []float64{1000, 0}
 	interp1.Input = 70
 
@@ -59,7 +59,7 @@ func main() {
 		// interpolate (Input: 70MB/s (sectors written per second + sectors read per second with 512 byte sectors) to the range of a SATA 7200's performance (BaseRange: 0 MB/s to 120 MB/s)
 		// to the range of the desired network rate (OutputRange: 1000mbps to 0mbps)
 		var interp rrd.Interpolation
-		interp.BaseRange = []float64{0, 100, 450}
+		interp.BaseRange = []float64{0, 100, 120}
 		interp.OutputRange = []float64{1000, 0}
 		interp.Input = 70
 
