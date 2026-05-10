@@ -36,10 +36,10 @@ func main() {
 	var interp1 rrd.Interpolation
 	interp1.BaseRange = []float64{0, 450}
 	interp1.OutputRange = []float64{1000, 0}
-	interp1.Input = 110.54354
+	interp1.Input = 70
 
 	// return the output value from the interpolations (interp0, interp1) that is the farthest in the OutputRange (1000 to 0)
-	var err, network_interface_rate = rrd.InterpolateValue([]rrd.Interpolation{interp0, interp1})
+	var err, network_interface_rate = rrd.InterpolateValue(true, []rrd.Interpolation{interp0, interp1})
 
 	if (err != nil) {
 
@@ -47,7 +47,34 @@ func main() {
 
 	} else {
 
-		fmt.Println("network interface rate from Interpolation:", network_interface_rate)
+		fmt.Printf("network interface rate from Interpolation: %.3f mbps\n", network_interface_rate)
+	}
+
+	if (true) {
+
+		// using a BaseRange that isn't linear
+
+		// this is like mapping to a Curve, you can make BaseRange any type of sequential curve you want, regardless of direction
+
+		// interpolate (Input: 70MB/s (sectors written per second + sectors read per second with 512 byte sectors) to the range of a SATA 7200's performance (BaseRange: 0 MB/s to 120 MB/s)
+		// to the range of the desired network rate (OutputRange: 1000mbps to 0mbps)
+		var interp rrd.Interpolation
+		interp.BaseRange = []float64{0, 100, 450}
+		interp.OutputRange = []float64{1000, 0}
+		interp.Input = 70
+
+		// return the output value from interp that is the farthest in the OutputRange (1000 to 0)
+		var err, network_interface_rate = rrd.InterpolateValue(true, []rrd.Interpolation{interp})
+
+		if (err != nil) {
+
+			fmt.Println("error interpolating network interface.", err.Error())
+
+		} else {
+
+			fmt.Printf("network interface rate from non linear Interpolation: %.3f mbps\n", network_interface_rate)
+		}
+
 	}
 
 }

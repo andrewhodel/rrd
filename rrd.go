@@ -23,6 +23,7 @@ import (
 	"math"
 	"errors"
 	"slices"
+	"cmp"
 )
 
 const (
@@ -43,33 +44,225 @@ type Rrd struct {
 }
 
 type Interpolation struct {
+	// at least 2 values that are sequential, regardless of direction
+	// each value is expected to be of an interval with an equal duration
+	//	BaseRange 0,100			Input 50			=OutputRatio .5
+	//	BaseRange 0,20,100		Input 50			=OutputRatio .6875
 	BaseRange		[]float64
+	// exactly 2 values
 	OutputRange		[]float64
 	Input			float64
 }
 
-func InterpolateValue(interpolations []Interpolation) (error, float64) {
+func InterpolateValue(validate_input bool, interpolations []Interpolation) (error, float64) {
 
 	// return the output value of the interpolation that is the farthest in the OutputRange
 	var output_value float64
+	var first_output_value_set = false
 
 	for l := range interpolations {
 
 		var interp = interpolations[l]
 
-		// each BaseRange and OutputRange must have at least 2 values
-		if (len(interp.BaseRange) < 2 || len(interp.OutputRange) < 2) {
-			return errors.New("BaseRange and OutputRange must each have at least 2 values, Interpolation " + strconv.Itoa(l) + " does not."), 0
+		if (validate_input == true) {
+
+			// each BaseRange must have at least 2 values
+			if (len(interp.BaseRange) < 2) {
+				return errors.New("Each BaseRange must have at least 2 values, Interpolation " + strconv.Itoa(l) + " does not."), 0
+			}
+
+			// each OutputRange must have exactly 2 values
+			if (len(interp.OutputRange) != 2) {
+				return errors.New("Each OutputRange must have exactly 2 values, Interpolation " + strconv.Itoa(l) + " does not."), 0
+			}
+
+			// the OutputRange of each Interpolation must be the same
+			var outputs_equal = slices.EqualFunc(interpolations[0].OutputRange, interp.OutputRange, func(a, b float64) (bool) {
+				return a == b
+			})
+
+			if (outputs_equal == false) {
+				return errors.New("OutputRange must be the same from each Interpolation."), 0
+			}
+
 		}
 
-		// the OutputRange of each Interpolation must be the same
-		var outputs_equal = slices.EqualFunc(interpolations[0].OutputRange, interp.OutputRange, func(a, b float64) (bool) {
-			return a == b
-		})
+		var this_output_value float64 = interp.BaseRange[0]
 
-		if (outputs_equal == false) {
-			return errors.New("OutputRange must be the same from each Interpolation."), 0
+		var base_range_direction = "asc"
+		if (interp.BaseRange[len(interp.BaseRange) - 1] < interp.BaseRange[0]) {
+			// BaseRange decreases by farther
+			base_range_direction = "desc"
 		}
+
+		var output_range_direction = "asc"
+		if (interp.OutputRange[1] < interp.OutputRange[0]) {
+			// OutputRange decreases by farther
+			output_range_direction = "desc"
+		}
+
+		if (validate_input == true) {
+
+			if (base_range_direction == "asc") {
+
+				if (slices.IsSorted(interp.BaseRange) == false) {
+					return errors.New("BaseRange is not in ascending order."), 0
+				}
+
+			} else {
+
+				is_desc := slices.IsSortedFunc(interp.BaseRange, func(a, b float64) (int) {
+					return cmp.Compare(b, a)
+				})
+
+				if (is_desc == false) {
+					return errors.New("BaseRange is not in descending order."), 0
+				}
+
+			}
+
+		}
+
+		// a number between 0 and 1 representing how far Input is within OutputRange
+		var input_ratio_of_output_range float64
+
+		if (base_range_direction == "asc") {
+
+			if (interp.Input >= interp.BaseRange[len(interp.BaseRange) - 1]) {
+
+				// if Input exceeds or is equal to the last value of BaseRange, Output is the last value of OutputRange
+				input_ratio_of_output_range = 1
+
+			} else {
+
+				// each value of BaseRange is expected to be of an interval with an equal duration
+				var ratio_per_step float64 = 1 / float64(len(interp.BaseRange) - 1)
+
+				for ll := range interp.BaseRange {
+
+					if (ll == 0) {
+						continue
+					}
+
+					var step_start = interp.BaseRange[ll - 1]
+					var step_end = interp.BaseRange[ll]
+
+					if (interp.Input >= step_start && interp.Input < step_end) {
+
+						// Input is within this step
+
+						var step = step_end - step_start
+
+						// a number between 0 and 1 representing how far Input is within this step of BaseRange
+						var input_ratio_of_base_range_step float64 = (interp.Input - step_start) / step
+
+						// add input_ratio_of_base_range_step of ratio_per_step to input_ratio_of_output_range
+						input_ratio_of_output_range += ratio_per_step * input_ratio_of_base_range_step
+
+					} else {
+
+						// Input is not within this step
+						// add ratio of step to input_ratio_of_output_range
+						input_ratio_of_output_range += ratio_per_step
+
+					}
+
+				}
+
+			}
+
+		} else {
+
+			if (interp.Input <= interp.BaseRange[len(interp.BaseRange) - 1]) {
+
+				// if Input is less than or is equal to the last value of BaseRange, Output is the last value of OutputRange
+				input_ratio_of_output_range = 1
+
+			} else {
+
+				// each value of BaseRange is expected to be of an interval with an equal duration
+				var ratio_per_step float64 = 1 / float64(len(interp.BaseRange) - 1)
+
+				slices.Reverse(interp.BaseRange)
+
+				for ll := range interp.BaseRange {
+
+					if (ll == 0) {
+						continue
+					}
+
+					var step_start = interp.BaseRange[ll - 1]
+					var step_end = interp.BaseRange[ll]
+
+					if (interp.Input >= step_start && interp.Input < step_end) {
+
+						// Input is within this step
+
+						var step = step_end - step_start
+
+						// a number between 0 and 1 representing how far Input is within this step of BaseRange
+						var input_ratio_of_base_range_step float64 = (interp.Input - step_start) / step
+
+						// add input_ratio_of_base_range_step of ratio_per_step to input_ratio_of_output_range
+						input_ratio_of_output_range += ratio_per_step * input_ratio_of_base_range_step
+
+					} else {
+
+						// Input is not within this step
+						// add ratio of step to input_ratio_of_output_range
+						input_ratio_of_output_range += ratio_per_step
+
+					}
+
+				}
+
+			}
+
+		}
+
+		if (output_range_direction == "asc") {
+
+			// OutputRange[1] is greater than OutputRange[0]
+			var output_range_total = interp.OutputRange[1] - interp.OutputRange[0]
+
+			this_output_value = interp.OutputRange[0] + (output_range_total * input_ratio_of_output_range)
+
+			if (first_output_value_set == false) {
+
+				output_value = this_output_value
+				first_output_value_set = true
+
+			} else if (this_output_value > output_value) {
+
+				// this_output_value is farther than output_value
+				// use it as output_value
+				output_value = this_output_value
+
+			}
+
+		} else {
+
+			// OutputRange[0] is greater than OutputRange[1]
+			var output_range_total = interp.OutputRange[0] - interp.OutputRange[1]
+
+			this_output_value = interp.OutputRange[0] - (output_range_total * input_ratio_of_output_range)
+
+			if (first_output_value_set == false) {
+
+				output_value = this_output_value
+				first_output_value_set = true
+
+			} else if (this_output_value < output_value) {
+
+				// this_output_value is farther than output_value
+				// use it as output_value
+				output_value = this_output_value
+
+			}
+
+		}
+
+		//fmt.Println("Interpolation", l, "input_ratio_of_output_range", input_ratio_of_output_range, "this_output_value", this_output_value)
 
 	}
 

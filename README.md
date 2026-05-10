@@ -25,7 +25,7 @@ __rrd.Update(intervalSeconds int64, totalSteps int64, dataType string, updateDat
 
 Updates an Rrd struct via a pointer.
 
-```go
+```
 debug								bool				output debug to console
 interval							int64				ideal time between updates
 totalSteps							int64				total steps of data
@@ -97,7 +97,12 @@ __rrd.Interpolation__
 
 ```go
 type Rrd struct {
+		// at least 2 values that are sequential, regardless of direction
+		// each value is expected to be of an interval with an equal duration
+		//	BaseRange 0,100			Input 50			=OutputRatio .5
+		//	BaseRange 0,20,100		Input 50			=OutputRatio .6875
 		BaseRange					[]float64
+		// exactly 2 values
 		OutputRange					[]float64
 		Input						float64
 }
