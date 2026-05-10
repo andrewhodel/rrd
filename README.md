@@ -1,33 +1,23 @@
-go-rrd - a pure Go [r]ound [r]obin [d]atabase library
+go-rrd - a [r]ound [r]obin [d]atabase library
 
-Simple RRD's.
-
-Video of the Example
-======
-https://www.youtube.com/watch?v=rWf1zqOcAag
-
-Installation
-======
+# Installation
 `go get github.com/andrewhodel/rrd`
-
-Example
-======
-
-On a linux system you can run example/example.go which provides a simple example that shows network interface traffic statistics.
 
 Documentation
 =============
+
+# Rrd
 
 __rrd.Rrd__
 
 ```go
 type Rrd struct {
-	D			[][]float64	`json:"d"`
-	R			[][]float64	`json:"r"`
-	CurrentStep		int64		`json:"currentStep"`
-	CurrentAvgCount		int64		`json:"currentAvgCount"`
-	FirstUpdateTs		*int64		`json:"firstUpdateTs"`
-	LastUpdateDataPoint	[]float64	`json:"lastUpdateDataPoint"`
+	D								[][]float64			`json:"d"`
+	R								[][]float64			`json:"r"`
+	CurrentStep						int64				`json:"currentStep"`
+	CurrentAvgCount					int64				`json:"currentAvgCount"`
+	FirstUpdateTs					*int64				`json:"firstUpdateTs"`
+	LastUpdateDataPoint				[]float64			`json:"lastUpdateDataPoint"`
 }
 ```
 
@@ -36,14 +26,14 @@ __rrd.Update(intervalSeconds int64, totalSteps int64, dataType string, updateDat
 Updates an Rrd struct via a pointer.
 
 ```go
-debug					bool			output debug to console
-interval				int64			ideal time between updates
-totalSteps				int64			total steps of data
-dataType				string			GAUGE or COUNTER
-	GAUGE - values that stay within the range of defined integer types, like the value of raw materials.
-	COUNTER - values that count and can exceed the maximum of a defined integer type.
-updateDataPoint			[]float64		array of data points for the update, must have the same order in following `Update`s.
-rrdPtr					*Rrd			pointer to an rrd.Rrd struct
+debug								bool				output debug to console
+interval							int64				ideal time between updates
+totalSteps							int64				total steps of data
+dataType							string				GAUGE or COUNTER
+														GAUGE - values that stay within the range of defined integer types, like the value of raw materials.
+														COUNTER - values that count and can exceed the maximum of a defined integer type.
+updateDataPoint						[]float64			array of data points for the update, must have the same order in following `Update`s.
+rrdPtr								*Rrd				pointer to an rrd.Rrd struct
 ```
 
 ```go
@@ -79,19 +69,47 @@ rrd.Update(false, time.Second, 5, "COUNTER", []float64 {40}, &rrdPtr)
 var avg = rrd.Avg(&rrdPtr, 0)
 ```
 
-# Rate Interval
+__rrd.Dump(rrdPtr *Rrd)__
+
+Print the Rrd to the screen in a readable format.
+
+## Example
+
+On a linux system you can run `example/example.go` to show network interface traffic statistics.
+
+## Video of the Example
+
+https://www.youtube.com/watch?v=rWf1zqOcAag
+
+## Rate Interval
 
 The rates are stored as a `float64` with a 1 second interval, providing nanosecond resolution.
 
-# Mutex
+## Mutex
 
 Use `sync.RWMutex` to write to the rrd with `rrd.Update` in `Lock` and read in `RLock`.
 
 `DebugMutex` from https://gist.github.com/andrewhodel/ed7625a14eb87404cafd37493849d1ba is helpful.
 
-__rrd.Dump(rrdPtr *Rrd)__
+# Interpolation
 
-Print the Rrd to the screen in a readable format.
+__rrd.Interpolation__
+
+```go
+type Rrd struct {
+		BaseRange					[]float64
+		OutputRange					[]float64
+		Input						float64
+}
+```
+
+__rrd.Interpolate(interpolations []Interpolatation) (error, float64)__
+
+Return the output value of the interpolation that is the farthest in the `OutputRange`.
+
+## Example
+
+`example/interpolation.go` shows how to know the desired rate of a network interface based on the size of an input buffer and the disk activity.
 
 Pattern/Sequence/Routine/Design/Order/Arrangement/Model/Structure Matching
 ========

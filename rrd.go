@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"strconv"
 	"math"
+	"errors"
+	"slices"
 )
 
 const (
@@ -38,6 +40,41 @@ type Rrd struct {
 	FirstUpdateTs		*time.Time	`bson:"firstUpdateTs" json:"firstUpdateTs"`
 	LastUpdateDataPoint	[]float64	`bson:"lastUpdateDataPoint" json:"lastUpdateDataPoint"`
 	MinimumDataPoints	uint64		`bson:"minimumDataPoints" json:"minimumDataPoints"`
+}
+
+type Interpolation struct {
+	BaseRange		[]float64
+	OutputRange		[]float64
+	Input			float64
+}
+
+func InterpolateValue(interpolations []Interpolation) (error, float64) {
+
+	// return the output value of the interpolation that is the farthest in the OutputRange
+	var output_value float64
+
+	for l := range interpolations {
+
+		var interp = interpolations[l]
+
+		// each BaseRange and OutputRange must have at least 2 values
+		if (len(interp.BaseRange) < 2 || len(interp.OutputRange) < 2) {
+			return errors.New("BaseRange and OutputRange must each have at least 2 values, Interpolation " + strconv.Itoa(l) + " does not."), 0
+		}
+
+		// the OutputRange of each Interpolation must be the same
+		var outputs_equal = slices.EqualFunc(interpolations[0].OutputRange, interp.OutputRange, func(a, b float64) (bool) {
+			return a == b
+		})
+
+		if (outputs_equal == false) {
+			return errors.New("OutputRange must be the same from each Interpolation."), 0
+		}
+
+	}
+
+	return nil, output_value
+
 }
 
 func Avg(rrdPtr *Rrd, index int) (float64) {
