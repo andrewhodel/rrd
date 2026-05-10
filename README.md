@@ -96,7 +96,7 @@ Use `sync.RWMutex` to write to the rrd with `rrd.Update` in `Lock` and read in `
 __rrd.Interpolation__
 
 ```go
-type Rrd struct {
+type Interpolation struct {
 		// at least 2 values that are sequential, regardless of direction
 		// each value is expected to be of an interval with an equal duration
 		//	BaseRange 0,100			Input 50			=OutputRatio .5
