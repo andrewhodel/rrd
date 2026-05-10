@@ -159,6 +159,8 @@ func InterpolateValue(validate_input bool, interpolations []Interpolation) (erro
 						// add input_ratio_of_base_range_step of ratio_per_step to input_ratio_of_output_range
 						input_ratio_of_output_range += ratio_per_step * input_ratio_of_base_range_step
 
+						break
+
 					} else {
 
 						// Input is not within this step
@@ -205,6 +207,8 @@ func InterpolateValue(validate_input bool, interpolations []Interpolation) (erro
 
 						// add input_ratio_of_base_range_step of ratio_per_step to input_ratio_of_output_range
 						input_ratio_of_output_range += ratio_per_step * input_ratio_of_base_range_step
+
+						break
 
 					} else {
 
