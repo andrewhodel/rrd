@@ -305,7 +305,9 @@ func Avg(rrdPtr *Rrd, index int) (float64) {
 
 	}
 
-	avg = avg / float64(count)
+	if (avg > 0) {
+		avg = avg / float64(count)
+	}
 
 	return avg
 
