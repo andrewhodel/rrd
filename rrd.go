@@ -295,22 +295,18 @@ func Avg(rrdPtr *Rrd, index int) (float64) {
 
 		// this is a GAUGE rrd
 
-		for e := range (*rrdPtr).R {
-			for n := range (*rrdPtr).R[e] {
-				avg += (*rrdPtr).R[e][n]
-				count += 1
-			}
+		for n := range (*rrdPtr).R[index] {
+			avg += (*rrdPtr).R[index][n]
+			count += 1
 		}
 
 	} else {
 
 		// this is a COUNTER rrd
 
-		for e := range (*rrdPtr).D {
-			for n := range (*rrdPtr).D[e] {
-				avg += (*rrdPtr).D[e][n]
-				count += 1
-			}
+		for n := range (*rrdPtr).D[index] {
+			avg += (*rrdPtr).D[index][n]
+			count += 1
 		}
 
 	}
