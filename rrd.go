@@ -34,13 +34,15 @@ const (
 )
 
 type Rrd struct {
-	D			[][]float64	`bson:"d" json:"d"`
-	R			[][]float64	`bson:"r" json:"r"`
-	CurrentAvgCount		int64		`bson:"currentAvgCount" json:"currentAvgCount"`
+	D			[][]float64	`xyzdb:"D" bson:"D" json:"D"`
+	R			[][]float64	`xyzdb:"R" bson:"R" json:"R"`
+	CurrentAvgCount		int64		`xyzdb:"CurrentAvgCount" bson:"CurrentAvgCount" json:"CurrentAvgCount"`
 	// use a pointer for FirstUpdateTs to allow nil values
-	FirstUpdateTs		*time.Time	`bson:"firstUpdateTs" json:"firstUpdateTs"`
-	LastUpdateDataPoint	[]float64	`bson:"lastUpdateDataPoint" json:"lastUpdateDataPoint"`
-	MinimumDataPoints	uint64		`bson:"minimumDataPoints" json:"minimumDataPoints"`
+	FirstUpdateTs		*time.Time	`xyzdb:"FirstUpdateTs" bson:"FirstUpdateTs" json:"FirstUpdateTs"`
+	LastUpdateDataPoint	[]float64	`xyzdb:"LastUpdateDataPoint" bson:"LastUpdateDataPoint" json:"LastUpdateDataPoint"`
+	LastUpdate		time.Time	`xyzdb:"LastUpdate" bson:"LastUpdate" json:"LastUpdate"`
+	MinimumDataPoints	uint64		`xyzdb:"MinimumDataPoints" bson:"MinimumDataPoints" json:"MinimumDataPoints"`
+	Interval		time.Duration	`xyzdb:"Interval" bson:"Interval" json:"Interval"`
 }
 
 type Interpolation struct {
@@ -289,7 +291,7 @@ func Avg(rrdPtr *Rrd, index int) (float64) {
 	// return the average of all the values in the Rrd at index
 
 	var avg float64
-	var count uint64
+	var count float64
 
 	if ((*rrdPtr).R != nil) {
 
@@ -312,7 +314,9 @@ func Avg(rrdPtr *Rrd, index int) (float64) {
 	}
 
 	if (avg > 0) {
-		avg = avg / float64(count)
+
+		avg = avg / count
+
 	}
 
 	return avg
@@ -321,7 +325,7 @@ func Avg(rrdPtr *Rrd, index int) (float64) {
 
 func Dump(rrdPtr *Rrd) {
 
-	fmt.Printf("rrdPtr: CurrentAvgCount %d, FirstUpdateTs %d\n", (*rrdPtr).CurrentAvgCount, *(*rrdPtr).FirstUpdateTs)
+	fmt.Printf("rrdPtr: CurrentAvgCount %d, FirstUpdateTs %d, LastUpdate: %s\n", (*rrdPtr).CurrentAvgCount, (*(*rrdPtr).FirstUpdateTs), (*rrdPtr).LastUpdate.Format(time.Kitchen))
 	fmt.Println("rrdPtr LastUpdateDataPoint:")
 
 	for e := range (*rrdPtr).LastUpdateDataPoint {
@@ -433,8 +437,11 @@ func RecalculateRate(interval time.Duration, totalSteps int64, rrdPtr *Rrd) {
 }
 
 func Update(debug bool, interval time.Duration, totalSteps int64, dataType string, updateDataPoint []float64, rrdPtr *Rrd) {
+
 	// all timing is based on system time at execution of Update()
 	// data can be sent from any time zone, even ones you don't know about yet
+
+	var updateTimeStamp = time.Now()
 
 	if (updateDataPoint == nil) {
 		return
@@ -492,8 +499,6 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType strin
 		if debug { fmt.Println("FirstUpdateTs is nil") }
 	}
 
-	var updateTimeStamp = time.Now()
-
 	// interval - ideal time between updates
 	// totalSteps - total steps of data
 	// dataType - GAUGE or COUNTER
@@ -509,7 +514,7 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType strin
 	if debug { fmt.Println("interval:", interval) }
 	if debug { fmt.Println("totalSteps: " + strconv.FormatInt(totalSteps, 10)) }
 	if ((*rrdPtr).FirstUpdateTs != nil) {
-		if debug { fmt.Println("firstUpdateTs:", (*(*rrdPtr).FirstUpdateTs), time.Now().Sub((*(*rrdPtr).FirstUpdateTs)), "ago") }
+		if debug { fmt.Println("firstUpdateTs:", (*(*rrdPtr).FirstUpdateTs), updateTimeStamp.Sub((*(*rrdPtr).FirstUpdateTs)), "ago") }
 	}
 	if debug { fmt.Println("updateTimeStamp:", updateTimeStamp) }
 	if debug { fmt.Println("updateDataPoint:") }
@@ -521,6 +526,7 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType strin
 
 	// store updateDataPoint array as lastUpdateDataPoint
 	(*rrdPtr).LastUpdateDataPoint = updateDataPoint
+	(*rrdPtr).LastUpdate = updateTimeStamp
 
 	// first need to see if this is the first update or not
 	if ((*rrdPtr).FirstUpdateTs == nil) {
