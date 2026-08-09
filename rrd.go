@@ -128,7 +128,7 @@ func InterpolateValue(validate_input bool, interpolations []Interpolation) (erro
 
 		if (base_range_direction == "asc") {
 
-			if (interp.Input <= interp.BaseRange[len(interp.BaseRange) - 2]) {
+			if (interp.Input <= interp.BaseRange[0]) {
 
 				// if Input is less than or equal to the first value of BaseRange, Output is the first value of OutputRange
 				input_ratio_of_output_range = 0
@@ -180,7 +180,7 @@ func InterpolateValue(validate_input bool, interpolations []Interpolation) (erro
 
 		} else {
 
-			if (interp.Input >= interp.BaseRange[len(interp.BaseRange) - 2]) {
+			if (interp.Input >= interp.BaseRange[0]) {
 
 				// if Input is greater than or equal to the first value of BaseRange, Output is the first value of OutputRange
 				input_ratio_of_output_range = 0
