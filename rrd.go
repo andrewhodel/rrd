@@ -469,7 +469,7 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 		// make all data point arrays at least the length of this update
 		for n := range (*rrdPtr).D {
 
-			if (dataType == 0) {
+			if (dataType == Counter) {
 
 				// Counter
 
@@ -550,7 +550,7 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 
 		// create the array of data points
 		(*rrdPtr).D = make([][]float64, totalSteps)
-		if (dataType == 0) {
+		if (dataType == Counter) {
 			// Counter
 			(*rrdPtr).R = make([][]float64, totalSteps)
 		}
@@ -576,7 +576,7 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 			(*rrdPtr).FirstUpdateTs = &updateTimeStamp
 
 			// reset all the data
-			if (dataType == 0) {
+			if (dataType == Counter) {
 				// counter types need a rate calculation
 				(*rrdPtr).R = nil
 				(*rrdPtr).R = make([][]float64, totalSteps)
@@ -653,7 +653,7 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 
 					temp = nil
 
-					if (dataType == 0) {
+					if (dataType == Counter) {
 
 						// Counter
 
@@ -687,14 +687,14 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 
 			// remove any data in this step because this is a NEW STEP
 			(*rrdPtr).D[currentStep] = nil
-			if (dataType == 0) {
+			if (dataType == Counter) {
 				// Counter
 				(*rrdPtr).R[currentStep] = nil
 			}
 
 			// handle different dataType
 			// this is normal processing for an update, assuming there was no previous data missing
-			if (dataType == 1) {
+			if (dataType == Gauge) {
 
 				// Gauge
 
@@ -706,7 +706,7 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 				// set the avgCount to 1
 				(*rrdPtr).CurrentAvgCount = 1
 
-			} else if (dataType == 0) {
+			} else if (dataType == Counter) {
 
 				// Counter
 
@@ -783,7 +783,7 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 			if debug { fmt.Println("##### SAME STEP ##### this update is in the same step as the previous") }
 
 			// handle different dataType
-			if (dataType == 1) {
+			if (dataType == Gauge) {
 
 				// Gauge
 
@@ -815,7 +815,7 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 
 				}
 
-			} else if (dataType == 0) {
+			} else if (dataType == Counter) {
 
 				// Counter
 
@@ -847,7 +847,7 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 
 func dataType_string(dataType uint8) (string) {
 
-	if (dataType == 0) {
+	if (dataType == Counter) {
 		return "Counter"
 	}
 
@@ -925,7 +925,7 @@ func WaitToken(token_queue_pointer *TokenQueue, size uint64, resource uint64) {
 	// when it's known that writing the data is instant
 	// for example, writing to a socket buffer that is immediately sent to another router's buffer
 
-	// only for TokenQueue.Type == 1
+	// only for TokenQueue.Type == rrd.InstantOutbound
 
 	var token Token
 	token.Size = size
@@ -980,7 +980,7 @@ func QueueToken(token_queue_pointer *TokenQueue, size uint64, resource uint64) (
 	// called to place a token in the token queue
 	// and blocks until the token can begin
 
-	// only for TokenQueue.Type == 0
+	// only for TokenQueue.Type == rrd.WorkingInbound
 
 	var token Token
 	token.Size = size
