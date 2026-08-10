@@ -112,6 +112,98 @@ __rrd.Interpolate(interpolations []Interpolatation) (error, float64)__
 
 Return the output value of the interpolation that is the farthest in the `OutputRange`.
 
+# Token Bucket Rate Limiting
+
+Each token has a size and the rate of transfer/transmit is applied by and to all `rrd.Token` of a `rrd.TokenQueue`.
+
+```go
+type TokenQueue struct {
+	// the sum of each Token.Size allowed per second
+	RatePerSecond			float64
+	Tokens				[]*Token
+	// 0 works with QueueToken and UnqueueToken
+	// 1 works with WaitToCompleteToken
+	Type				uint8
+	RrdPointer			*Rrd
+	sync.RWMutex
+}
+
+type Token struct {
+	// the size of this token, write size in bytes for example
+	Size				uint64
+	Pending				bool
+	// a number identifying the entity or resource that is the source of the token
+	// must be the same of each token that is from the same resource to have fair allocation
+	Resource			uint64
+	Time				time.Time
+}
+```
+
+## rrd.WorkingInbound
+
+This is used to write to disk or with extremely large RAM writes that require time.
+
+It can be best understood as something is arriving and there is work to do because of it.
+
+```go
+// create a rrd.TokenQueue that limits disk writing at 200MB/s
+var token_queue_pointer *rrd.TokenQueue
+rrd.SetTokenQueueLimiter(token_queue_pointer, 200 * 1000 * 1000, rrd.WorkingInbound)
+
+// write 2000MB to disk from 50,000 goroutines
+var count = 0
+for {
+
+    if (count == 50000) {
+        break
+    }
+
+    go func() {
+
+        var write_size uint64 = 40000
+
+        var data_to_write = make([]byte, write_size)
+
+        var token_pointer = rrd.QueueToken(&token_queue_pointer, write_size, 0)
+
+        // write to disk
+
+        rrd.UnqueueToken(token_queue_pointer, token_pointer)
+
+    }()
+
+    count += 1
+
+}
+```
+
+## rrd.InstantOutbound
+
+This is used to write to a buffer that's expected to be instant like a socket buffer.
+
+It can be best understood as something is being sent instantly to a TCP buffer that very quickly sends it to another router's inbound TCP queues.
+
+```go
+// create a rrd.TokenQueue that limits data sent to a TCP socket at 400 KB/s
+var token_queue_pointer *rrd.TokenQueue
+rrd.SetTokenQueueLimiter(token_queue_pointer, 400 * 1000, rrd.InstantOutbound)
+
+for {
+
+    // send 2MB each iteration
+    var send_size uint64 = 1000 * 1000 * 2
+
+    var data_to_send = make([]byte, send_size)
+
+    rrd.WaitToken(token_queue_pointer, write_size, 0)
+
+    // this is `instant` enough to work with rrd.InstantOutbound
+    socket.Write(data_to_send)
+
+}
+
+```
+
 ## Example
 
 `example/interpolation.go` shows how to know the desired rate of a network interface based on the size of an input buffer and the disk activity.

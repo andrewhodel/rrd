@@ -1,8 +1,8 @@
 /*
 
 Copyright 2026 Andrew Hodel
-	andrewhodel@gmail.com
 	andrew@xyzbots.com
+	andrewhodel@gmail.com
 
 LICENSE MIT
 
@@ -24,6 +24,8 @@ import (
 	"errors"
 	"slices"
 	"cmp"
+	"sync"
+	"os"
 )
 
 const (
@@ -36,6 +38,10 @@ const (
 	// rrd types
 	Counter uint8 = 0
 	Gauge uint8 = 1
+
+	// token queue types
+	WorkingInbound uint8 = 0
+	InstantOutbound uint8 = 1
 
 )
 
@@ -846,5 +852,281 @@ func dataType_string(dataType uint8) (string) {
 	}
 
 	return "Gauge"
+
+}
+
+type TokenQueue struct {
+	// the sum of each Token.Size allowed per second
+	RatePerSecond			float64
+	Tokens				[]*Token
+	// 0 works with QueueToken and UnqueueToken
+	// 1 works with WaitToCompleteToken
+	Type				uint8
+	RrdPointer			*Rrd
+	sync.RWMutex
+}
+
+type Token struct {
+	// the size of this token, write size in bytes for example
+	Size				uint64
+	Pending				bool
+	// a number identifying the entity or resource that is the source of the token
+	// must be the same of each token that is from the same resource to have fair allocation
+	Resource			uint64
+	Time				time.Time
+}
+
+func SetTokenQueueLimiter(token_queue_pointer *TokenQueue, rate_per_second float64, token_queue_type uint8) {
+
+	if (token_queue_pointer == nil) {
+
+		// create a new TokenQueue
+
+		var token_queue TokenQueue
+		token_queue.RatePerSecond = rate_per_second
+		token_queue.Type = token_queue_type
+
+		if (token_queue_type == InstantOutbound) {
+
+			// create RRD
+			var rrd_pointer Rrd
+			token_queue.RrdPointer = &rrd_pointer
+
+		}
+
+		token_queue_pointer = &token_queue
+
+	} else {
+
+		// update the existing TokenQueue
+
+		(*token_queue_pointer).Lock()
+
+		(*token_queue_pointer).RatePerSecond = rate_per_second
+		(*token_queue_pointer).Type = token_queue_type
+
+		if (token_queue_type == InstantOutbound) {
+
+			// create RRD
+			var rrd_pointer Rrd
+			(*token_queue_pointer).RrdPointer = &rrd_pointer
+
+		}
+
+		(*token_queue_pointer).Unlock()
+
+	}
+
+}
+
+func WaitToken(token_queue_pointer *TokenQueue, size uint64, resource uint64) {
+
+	// called to make the token wait based on the rate and number of other WaitToken calls of the same TokenQueue
+	// when it's known that writing the data is instant
+	// for example, writing to a socket buffer that is immediately sent to another router's buffer
+
+	// only for TokenQueue.Type == 1
+
+	var token Token
+	token.Size = size
+	token.Resource = resource
+	token.Time = time.Now()
+
+	(*token_queue_pointer).RLock()
+
+	if ((*token_queue_pointer).Type == InstantOutbound) {
+
+		fmt.Println("WaitToken requires TokenQueue.Type == rrd.InstantOutbound.")
+		os.Exit(1)
+
+	}
+
+	(*token_queue_pointer).RUnlock()
+
+	for {
+
+		(*token_queue_pointer).RLock()
+
+		if (Avg((*token_queue_pointer).RrdPointer, 0) > (*token_queue_pointer).RatePerSecond) {
+
+			// the rate is higher than TokenQueue.RatePerSecond
+			// wait
+
+		} else {
+
+			// the token can proceed
+
+			// update the RRD to keep track of the rate
+			Update(false, time.Second, 5, Counter, []float64{float64(token.Size)}, (*token_queue_pointer).RrdPointer)
+
+			// FIX add Token.Resource tracking to have fair instead of sequential allocation
+
+			(*token_queue_pointer).RUnlock()
+
+			return
+
+		}
+
+		(*token_queue_pointer).RUnlock()
+
+		time.Sleep(time.Microsecond * 200)
+
+	}
+
+}
+
+func QueueToken(token_queue_pointer *TokenQueue, size uint64, resource uint64) (*Token) {
+
+	// called to place a token in the token queue
+	// and blocks until the token can begin
+
+	// only for TokenQueue.Type == 0
+
+	var token Token
+	token.Size = size
+	token.Resource = resource
+	token.Time = time.Now()
+
+	var only_token = false
+
+	(*token_queue_pointer).Lock()
+
+	if ((*token_queue_pointer).Type == WorkingInbound) {
+
+		fmt.Println("QueueToken requires TokenQueue.Type == rrd.WorkingInbound.")
+		os.Exit(1)
+
+	} else if ((*token_queue_pointer).RatePerSecond == 0) {
+
+		// there is no rate set, do not block or return a pointer
+		(*token_queue_pointer).Unlock()
+		return nil
+
+	}
+
+	(*token_queue_pointer).Tokens = append((*token_queue_pointer).Tokens, &token)
+
+	if (len((*token_queue_pointer).Tokens) == 1) {
+
+		// the token added is the only token
+		token.Pending = true
+		only_token = true
+
+	}
+
+	(*token_queue_pointer).Unlock()
+
+	if (only_token == true) {
+
+		return &token
+
+	}
+
+	for {
+
+		// find the rate of the pending tokens
+		var pending_tokens_rate uint64
+
+		// find the Time of the first token that is Pending
+		var first_pending_time *time.Time
+
+		// find the first token that is not Pending
+		var first_non_pending_index int = -1
+
+		(*token_queue_pointer).RLock()
+
+		for l := range (*token_queue_pointer).Tokens {
+
+			var this_token_pointer = (*token_queue_pointer).Tokens[l]
+
+			if ((*this_token_pointer).Pending == false) {
+
+				// this token is not Pending
+				first_non_pending_index = l
+				break
+
+			}
+
+			if (first_pending_time == nil) {
+				first_pending_time = &(*this_token_pointer).Time
+			}
+
+			pending_tokens_rate += (*this_token_pointer).Size
+
+		}
+
+		if (pending_tokens_rate == 0) {
+
+			// no tokens are pending, start without wait
+			(*token_queue_pointer).RUnlock()
+
+			(*token_queue_pointer).Lock()
+			token.Pending = true
+			(*token_queue_pointer).Unlock()
+
+			return &token
+
+		}
+
+		// FIX get best token to allow with fair allocation instead of only sequential allocation
+		var best_token_pointer = (*token_queue_pointer).Tokens[first_non_pending_index]
+
+		(*token_queue_pointer).RUnlock()
+
+		if (best_token_pointer == &token) {
+
+			// the token created by this QueueToken is the best token to let be Pending
+
+			// get the pending_tokens_rate
+			var duration_since_first_pending_token = time.Now().Sub((*first_pending_time))
+			var actual_pending_tokens_rate = float64(pending_tokens_rate) / duration_since_first_pending_token.Seconds()
+
+			if ((*token_queue_pointer).RatePerSecond > actual_pending_tokens_rate) {
+
+				// the rate per second of the TokenQueue has not been breached
+				break
+
+			}
+
+		}
+
+		// wait long enough for a token to complete
+		// this needs to be low enough to handle the RatePerSecond of the queue
+		// 200 microsecond iterations and 80MB per iteration is 400GB/s
+		// and 1 million concurrent QueueToken calls would use all 5ghz of a CPU
+		time.Sleep(time.Microsecond * 200)
+
+	}
+
+	(*token_queue_pointer).Lock()
+	token.Pending = true
+	(*token_queue_pointer).Unlock()
+
+	return &token
+
+}
+
+func UnqueueToken(token_queue_pointer *TokenQueue, token_pointer *Token) {
+
+	// called once the token has been used by a slow process that relies on the token queue rate
+	// mostly writing to disk or many gigabytes being written to RAM
+
+	(*token_queue_pointer).Lock()
+
+	for l := range (*token_queue_pointer).Tokens {
+
+		var this_token_pointer = (*token_queue_pointer).Tokens[l]
+
+		if (this_token_pointer == token_pointer) {
+
+			// delete the token
+			(*token_queue_pointer).Tokens = slices.Delete((*token_queue_pointer).Tokens, l, l + 1)
+			break
+
+		}
+
+	}
+
+	(*token_queue_pointer).Unlock()
 
 }
