@@ -98,7 +98,7 @@ func main() {
 
 		}
 
-		rrd.Update(true, time.Second * 8, 10, "COUNTER", if_counter, &rrdPtr)
+		rrd.Update(true, time.Second * 8, 10, rrd.Counter, if_counter, &rrdPtr)
 
 		rrd.Dump(&rrdPtr)
 

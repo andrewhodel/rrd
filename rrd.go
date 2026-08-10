@@ -27,10 +27,16 @@ import (
 )
 
 const (
+
 	// color codes
 	colorCodeRed = "\033[31m"
 	colorCodeBlue = "\033[34m"
 	colorCodeReset = "\033[0m"
+
+	// rrd types
+	Counter uint8 = 0
+	Gauge uint8 = 1
+
 )
 
 type Rrd struct {
@@ -295,7 +301,7 @@ func Avg(rrdPtr *Rrd, index int) (float64) {
 
 	if ((*rrdPtr).R != nil) {
 
-		// this is a GAUGE rrd
+		// this is a Gauge rrd
 
 		for n := range (*rrdPtr).R[index] {
 			avg += (*rrdPtr).R[index][n]
@@ -304,7 +310,7 @@ func Avg(rrdPtr *Rrd, index int) (float64) {
 
 	} else {
 
-		// this is a COUNTER rrd
+		// this is a Counter rrd
 
 		for n := range (*rrdPtr).D[index] {
 			avg += (*rrdPtr).D[index][n]
@@ -334,7 +340,7 @@ func Dump(rrdPtr *Rrd) {
 
 	fmt.Println("")
 
-	fmt.Printf("rrdPtr D (COUNTER VALUES) (%d):\n", len((*rrdPtr).D))
+	fmt.Printf("rrdPtr D (Counter VALUES) (%d):\n", len((*rrdPtr).D))
 
 	for e := range (*rrdPtr).D {
 		for n := range (*rrdPtr).D[e] {
@@ -346,7 +352,7 @@ func Dump(rrdPtr *Rrd) {
 	fmt.Println("")
 
 	if ((*rrdPtr).R != nil) {
-		fmt.Printf("rrdPtr R (RATE PER SECOND OF COUNTER INTERVALS) (%d):\n", len((*rrdPtr).R))
+		fmt.Printf("rrdPtr R (RATE PER SECOND OF Counter INTERVALS) (%d):\n", len((*rrdPtr).R))
 
 		for e := range (*rrdPtr).R {
 			for n := range (*rrdPtr).R[e] {
@@ -436,7 +442,7 @@ func RecalculateRate(interval time.Duration, totalSteps int64, rrdPtr *Rrd) {
 
 }
 
-func Update(debug bool, interval time.Duration, totalSteps int64, dataType string, updateDataPoint []float64, rrdPtr *Rrd) {
+func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8, updateDataPoint []float64, rrdPtr *Rrd) {
 
 	// all timing is based on system time at execution of Update()
 	// data can be sent from any time zone, even ones you don't know about yet
@@ -457,7 +463,10 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType strin
 		// make all data point arrays at least the length of this update
 		for n := range (*rrdPtr).D {
 
-			if (dataType == "COUNTER") {
+			if (dataType == 0) {
+
+				// Counter
+
 				// R values
 
 				if (len((*rrdPtr).R[n]) == 0) {
@@ -501,16 +510,16 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType strin
 
 	// interval - ideal time between updates
 	// totalSteps - total steps of data
-	// dataType - GAUGE or COUNTER
-	//  GAUGE - values that stay within the range of defined integer types, like the value of raw materials.
-	//  COUNTER - values that count and can exceed the maximum of a defined integer type.
+	// dataType - rrd.Gauge or rrd.Counter
+	//  Gauge - values that stay within the range of defined integer types, like the value of raw materials.
+	//  Counter - values that count and can exceed the maximum of a defined integer type.
 	// updateTimeStamp - unix epoch timestamp of this update
 	// updateDataPoint - data object for this update
 	// rrdPtr - data from previous updates
 	//
 	// returns rrd.Rrd with update added
 
-	if debug { fmt.Println("\n" + colorCodeRed + "### NEW " + dataType + " UPDATE ###" + colorCodeReset) }
+	if debug { fmt.Println("\n" + colorCodeRed + "### NEW " + dataType_string(dataType) + " UPDATE ###" + colorCodeReset) }
 	if debug { fmt.Println("interval:", interval) }
 	if debug { fmt.Println("totalSteps: " + strconv.FormatInt(totalSteps, 10)) }
 	if ((*rrdPtr).FirstUpdateTs != nil) {
@@ -535,7 +544,8 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType strin
 
 		// create the array of data points
 		(*rrdPtr).D = make([][]float64, totalSteps)
-		if (dataType == "COUNTER") {
+		if (dataType == 0) {
+			// Counter
 			(*rrdPtr).R = make([][]float64, totalSteps)
 		}
 
@@ -560,7 +570,7 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType strin
 			(*rrdPtr).FirstUpdateTs = &updateTimeStamp
 
 			// reset all the data
-			if (dataType == "COUNTER") {
+			if (dataType == 0) {
 				// counter types need a rate calculation
 				(*rrdPtr).R = nil
 				(*rrdPtr).R = make([][]float64, totalSteps)
@@ -572,7 +582,7 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType strin
 		}
 
 		// this is not the first update
-		if debug { fmt.Println(colorCodeBlue + "### PROCESSING " + dataType + " UPDATE ###" + colorCodeReset) }
+		if debug { fmt.Println(colorCodeBlue + "### PROCESSING " + dataType_string(dataType) + " UPDATE ###" + colorCodeReset) }
 
 		// this timestamp
 		if debug { fmt.Println("updateTimeStamp:", updateTimeStamp) }
@@ -637,7 +647,9 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType strin
 
 					temp = nil
 
-					if (dataType == "COUNTER") {
+					if (dataType == 0) {
+
+						// Counter
 
 						// shift the existing rates
 
@@ -669,13 +681,16 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType strin
 
 			// remove any data in this step because this is a NEW STEP
 			(*rrdPtr).D[currentStep] = nil
-			if (dataType == "COUNTER") {
+			if (dataType == 0) {
+				// Counter
 				(*rrdPtr).R[currentStep] = nil
 			}
 
 			// handle different dataType
 			// this is normal processing for an update, assuming there was no previous data missing
-			if (dataType == "GAUGE") {
+			if (dataType == 1) {
+
+				// Gauge
 
 				// insert the data for each data point
 				for e := range updateDataPoint {
@@ -685,7 +700,9 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType strin
 				// set the avgCount to 1
 				(*rrdPtr).CurrentAvgCount = 1
 
-			} else if (dataType == "COUNTER") {
+			} else if (dataType == 0) {
+
+				// Counter
 
 				// for each data point
 				for e := range updateDataPoint {
@@ -751,7 +768,7 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType strin
 				}
 
 			} else {
-				if debug { fmt.Println("unsupported dataType " + dataType) }
+				if debug { fmt.Println("unsupported dataType " + dataType_string(dataType)) }
 			}
 
 		} else if (len((*rrdPtr).D[currentStep]) == len(updateDataPoint)) {
@@ -760,7 +777,10 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType strin
 			if debug { fmt.Println("##### SAME STEP ##### this update is in the same step as the previous") }
 
 			// handle different dataType
-			if (dataType == "GAUGE") {
+			if (dataType == 1) {
+
+				// Gauge
+
 				// this update needs to be averaged with the data in this step
 
 				// need to do this for each data point
@@ -789,14 +809,17 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType strin
 
 				}
 
-			} else if (dataType == "COUNTER") {
+			} else if (dataType == 0) {
+
+				// Counter
+
 				// set the counter on this step to that of this update
 				for e := range updateDataPoint {
 					(*rrdPtr).D[currentStep][e] = updateDataPoint[e]
 				}
 
 			} else {
-				if debug { fmt.Println("unsupported dataType " + dataType) }
+				if debug { fmt.Println("unsupported dataType " + dataType_string(dataType)) }
 
 			}
 		}
@@ -813,5 +836,15 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType strin
 		}
 
 	}
+
+}
+
+func dataType_string(dataType uint8) (string) {
+
+	if (dataType == 0) {
+		return "Counter"
+	}
+
+	return "Gauge"
 
 }

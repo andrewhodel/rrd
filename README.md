@@ -29,9 +29,9 @@ Updates an Rrd struct via a pointer.
 debug								bool				output debug to console
 interval							int64				ideal time between updates
 totalSteps							int64				total steps of data
-dataType							string				GAUGE or COUNTER
-														GAUGE - values that stay within the range of defined integer types, like the value of raw materials.
-														COUNTER - values that count and can exceed the maximum of a defined integer type.
+dataType							uint8				rrd.Gauge or rrd.Counter
+														Gauge - values that stay within the range of defined integer types, like the value of raw materials.
+														Counter - values that count and can exceed the maximum of a defined integer type.
 updateDataPoint						[]float64			array of data points for the update, must have the same order in following `Update`s.
 rrdPtr								*Rrd				pointer to an rrd.Rrd struct
 ```
@@ -40,28 +40,28 @@ rrdPtr								*Rrd				pointer to an rrd.Rrd struct
 var rrdPtr Rrd
 
 // 24 hours with 5 minute interval (24 * 60 / 5 samples)
-rrd.Update(false, time.Minute * 5, 24*60/5, "GAUGE", []float64 {434, 700}, &rrdPtr)
+rrd.Update(false, time.Minute * 5, 24*60/5, rrd.Gauge, []float64 {434, 700}, &rrdPtr)
 ```
 
 ```go
 var rrdPtr Rrd
 
 // 30 days with 1 hour interval (30 * 24 samples)
-rrd.Update(false, time.Hour, 30*24, "GAUGE", []float64 {434, 700}, &rrdPtr)
+rrd.Update(false, time.Hour, 30*24, rrd.Gauge, []float64 {434, 700}, &rrdPtr)
 ```
 
 ```go
 var rrdPtr Rrd
 
 // 365 days with 1 day interval (365 samples)
-rrd.Update(false, time.Hour * 24, 365, "GAUGE", []float64 {434, 700}, &rrdPtr)
+rrd.Update(false, time.Hour * 24, 365, rrd.Gauge, []float64 {434, 700}, &rrdPtr)
 ```
 
 ```go
 var rrdPtr Rrd
 
 // 5 seconds with a 1 second interval (5 samples)
-rrd.Update(false, time.Second, 5, "COUNTER", []float64 {40}, &rrdPtr)
+rrd.Update(false, time.Second, 5, rrd.Counter, []float64 {40}, &rrdPtr)
 
 // get average of all data
 // try it with /proc/diskstats field 8 (writes completed)
