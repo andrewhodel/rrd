@@ -148,7 +148,7 @@ It can be best understood as something is arriving and there is work to do becau
 ```go
 // create a rrd.TokenQueue that limits disk writing at 200MB/s
 var token_queue_pointer *rrd.TokenQueue
-rrd.SetTokenQueueLimiter(token_queue_pointer, 200 * 1000 * 1000, rrd.WorkingInbound)
+rrd.SetTokenQueueLimiter(&token_queue_pointer, 200 * 1000 * 1000, rrd.WorkingInbound)
 
 // write 2000MB to disk from 50,000 goroutines
 var count = 0
@@ -186,7 +186,7 @@ It can be best understood as something is being sent instantly to a TCP buffer t
 ```go
 // create a rrd.TokenQueue that limits data sent to a TCP socket at 400 KB/s
 var token_queue_pointer *rrd.TokenQueue
-rrd.SetTokenQueueLimiter(token_queue_pointer, 400 * 1000, rrd.InstantOutbound)
+rrd.SetTokenQueueLimiter(&token_queue_pointer, 400 * 1000, rrd.InstantOutbound)
 
 for {
 
