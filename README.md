@@ -132,9 +132,9 @@ type Token struct {
 	// the size of this token, write size in bytes for example
 	Size				uint64
 	Pending				bool
-	// a number identifying the entity or resource that is the source of the token
-	// must be the same of each token that is from the same resource to have fair allocation
-	Resource			uint64
+	// the lowest Prio proceeds first
+	// this allows allocation and order to be handled conceptually at each Token
+	Prio				uint64
 	Time				time.Time
 }
 ```

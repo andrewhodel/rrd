@@ -878,9 +878,9 @@ type Token struct {
 	// the size of this token, write size in bytes for example
 	Size				uint64
 	Pending				bool
-	// a number identifying the entity or resource that is the source of the token
-	// must be the same of each token that is from the same resource to have fair allocation
-	Resource			uint64
+	// the lowest Prio proceeds first
+	// this allows allocation and order to be handled conceptually at each Token
+	Prio				uint64
 	Time				time.Time
 }
 
@@ -961,7 +961,7 @@ func SetTokenQueueLimiter(token_queue_pointer **TokenQueue, rate_per_second floa
 
 }
 
-func WaitToken(token_queue_pointer *TokenQueue, size uint64, resource uint64) {
+func WaitToken(token_queue_pointer *TokenQueue, size uint64, prio uint64) {
 
 	// called to make the token wait based on the rate and number of other WaitToken calls of the same TokenQueue
 	// when it's known that writing the data is instant
@@ -971,10 +971,10 @@ func WaitToken(token_queue_pointer *TokenQueue, size uint64, resource uint64) {
 
 	var token Token
 	token.Size = size
-	token.Resource = resource
+	token.Prio = prio
 	token.Time = time.Now()
 
-	(*token_queue_pointer).RLock()
+	(*token_queue_pointer).Lock()
 
 	if ((*token_queue_pointer).Type != InstantOutbound) {
 
@@ -989,7 +989,9 @@ func WaitToken(token_queue_pointer *TokenQueue, size uint64, resource uint64) {
 
 	}
 
-	(*token_queue_pointer).RUnlock()
+	(*token_queue_pointer).Tokens = append((*token_queue_pointer).Tokens, &token)
+
+	(*token_queue_pointer).Unlock()
 
 	for {
 
@@ -1002,19 +1004,57 @@ func WaitToken(token_queue_pointer *TokenQueue, size uint64, resource uint64) {
 
 		} else {
 
-			// the token can proceed
+			// the token can proceed according the RRD rate
+
+			// find the lowest Prio
+			var lowest_prio uint64 = math.MaxUint64
+			var prios = make(map[uint64] []*Token, 10)
+
+			for l := range (*token_queue_pointer).Tokens {
+
+				var this_token_pointer = (*token_queue_pointer).Tokens[l]
+
+				if ((*this_token_pointer).Prio <= lowest_prio) {
+
+					// this token has equal to or lower than the lowest Prio
+
+					prios[(*this_token_pointer).Prio] = append(prios[(*this_token_pointer).Prio], this_token_pointer)
+					lowest_prio = (*this_token_pointer).Prio
+
+				}
+
+			}
 
 			(*token_queue_pointer).RUnlock()
 
-			(*token_queue_pointer).Lock()
+			if (token.Prio == lowest_prio && &token == prios[token.Prio][0]) {
 
-			(*token_queue_pointer).Sum += token.Size
+				// this token has the lowest Prio
+				// and is the first in sequence of this Prio
 
-			// FIX add Token.Resource tracking to have fair instead of sequential allocation
+				(*token_queue_pointer).Lock()
 
-			(*token_queue_pointer).Unlock()
+				(*token_queue_pointer).Sum += token.Size
 
-			return
+				for l := range (*token_queue_pointer).Tokens {
+
+					var this_token_pointer = (*token_queue_pointer).Tokens[l]
+
+					if (this_token_pointer == &token) {
+
+						// delete the token
+						(*token_queue_pointer).Tokens = slices.Delete((*token_queue_pointer).Tokens, l, l + 1)
+						break
+
+					}
+
+				}
+
+				(*token_queue_pointer).Unlock()
+
+				return
+
+			}
 
 		}
 
@@ -1026,7 +1066,7 @@ func WaitToken(token_queue_pointer *TokenQueue, size uint64, resource uint64) {
 
 }
 
-func QueueToken(token_queue_pointer *TokenQueue, size uint64, resource uint64) (*Token) {
+func QueueToken(token_queue_pointer *TokenQueue, size uint64, prio uint64) (*Token) {
 
 	// called to place a token in the token queue
 	// and blocks until the token can begin
@@ -1035,7 +1075,7 @@ func QueueToken(token_queue_pointer *TokenQueue, size uint64, resource uint64) (
 
 	var token Token
 	token.Size = size
-	token.Resource = resource
+	token.Prio = prio
 	token.Time = time.Now()
 
 	var only_token = false
@@ -1076,8 +1116,9 @@ func QueueToken(token_queue_pointer *TokenQueue, size uint64, resource uint64) (
 			// find the Time of the first token that is Pending
 			var first_pending_time *time.Time
 
-			// find the first token that is not Pending
-			var first_non_pending_index int = -1
+			// find the lowest Prio
+			var lowest_prio uint64 = math.MaxUint64
+			var prios = make(map[uint64] []*Token, 10)
 
 			(*token_queue_pointer).RLock()
 
@@ -1087,19 +1128,24 @@ func QueueToken(token_queue_pointer *TokenQueue, size uint64, resource uint64) (
 
 				var this_token_pointer = (*token_queue_pointer).Tokens[l]
 
-				if ((*this_token_pointer).Pending == false) {
+				if ((*this_token_pointer).Pending == true) {
 
-					// this token is not Pending
-					first_non_pending_index = l
-					break
+					// this token is Pending
+
+					if (first_pending_time == nil) {
+						first_pending_time = &(*this_token_pointer).Time
+					}
+
+					pending_tokens_rate += (*this_token_pointer).Size
+
+				} else if ((*this_token_pointer).Prio <= lowest_prio) {
+
+					// this token is not Pending and has equal to or lower than the lowest Prio
+
+					prios[(*this_token_pointer).Prio] = append(prios[(*this_token_pointer).Prio], this_token_pointer)
+					lowest_prio = (*this_token_pointer).Prio
 
 				}
-
-				if (first_pending_time == nil) {
-					first_pending_time = &(*this_token_pointer).Time
-				}
-
-				pending_tokens_rate += (*this_token_pointer).Size
 
 			}
 
@@ -1112,12 +1158,12 @@ func QueueToken(token_queue_pointer *TokenQueue, size uint64, resource uint64) (
 
 			}
 
-			// FIX get best token to allow with fair allocation instead of only sequential allocation
-			var best_token_pointer = (*token_queue_pointer).Tokens[first_non_pending_index]
-
 			(*token_queue_pointer).RUnlock()
 
-			if (best_token_pointer == &token) {
+			if (token.Prio == lowest_prio && &token == prios[token.Prio][0]) {
+
+				// this token has the lowest Prio
+				// and is the first in sequence of this Prio
 
 				// the token created by this QueueToken is the best token to let be Pending
 
