@@ -164,7 +164,9 @@ for {
 
         var data_to_write = make([]byte, write_size)
 
-        var token_pointer = rrd.QueueToken(&token_queue_pointer, write_size, 0)
+        // Prio can be set, try 1 with large files and 0 with the last write of any file
+        // MaxWait can be set and is used regardless of Prio
+        var token_pointer = rrd.QueueToken(&token_queue_pointer, write_size, 0, nil)
 
         // write to disk
 
@@ -197,7 +199,7 @@ for {
 
     var data_to_send = make([]byte, send_size)
 
-    rrd.WaitToken(token_queue_pointer, write_size, 0)
+    rrd.WaitToken(token_queue_pointer, write_size, 0, nil)
 
     // this is `instant` enough to work with rrd.Instant
     socket.Write(data_to_send)

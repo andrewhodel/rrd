@@ -882,6 +882,7 @@ type Token struct {
 	// this allows allocation and order to be handled conceptually at each Token
 	Prio				uint64
 	Time				time.Time
+	MaxWait				*time.Duration
 }
 
 func SetTokenQueueLimiter(token_queue_pointer **TokenQueue, rate_per_second float64, token_queue_type uint8) {
@@ -961,7 +962,7 @@ func SetTokenQueueLimiter(token_queue_pointer **TokenQueue, rate_per_second floa
 
 }
 
-func WaitToken(token_queue_pointer *TokenQueue, size uint64, prio uint64) {
+func WaitToken(token_queue_pointer *TokenQueue, size uint64, prio uint64, max_wait *time.Duration) {
 
 	// called to make the token wait based on the rate and number of other WaitToken calls of the same TokenQueue
 	// when it's known that writing the data is instant
@@ -973,6 +974,7 @@ func WaitToken(token_queue_pointer *TokenQueue, size uint64, prio uint64) {
 	token.Size = size
 	token.Prio = prio
 	token.Time = time.Now()
+	token.MaxWait = max_wait
 
 	(*token_queue_pointer).Lock()
 
@@ -994,6 +996,13 @@ func WaitToken(token_queue_pointer *TokenQueue, size uint64, prio uint64) {
 	(*token_queue_pointer).Unlock()
 
 	for {
+
+		if (token.MaxWait != nil && time.Now().Sub(token.Time) >= (*token.MaxWait)) {
+
+			// this token has a MaxWait that is at least now
+			break
+
+		}
 
 		(*token_queue_pointer).RLock()
 
@@ -1066,7 +1075,7 @@ func WaitToken(token_queue_pointer *TokenQueue, size uint64, prio uint64) {
 
 }
 
-func QueueToken(token_queue_pointer *TokenQueue, size uint64, prio uint64) (*Token) {
+func QueueToken(token_queue_pointer *TokenQueue, size uint64, prio uint64, max_wait *time.Duration) (*Token) {
 
 	// called to place a token in the token queue
 	// and blocks until the token can begin
@@ -1077,6 +1086,7 @@ func QueueToken(token_queue_pointer *TokenQueue, size uint64, prio uint64) (*Tok
 	token.Size = size
 	token.Prio = prio
 	token.Time = time.Now()
+	token.MaxWait = max_wait
 
 	var only_token = false
 
@@ -1109,6 +1119,13 @@ func QueueToken(token_queue_pointer *TokenQueue, size uint64, prio uint64) (*Tok
 	if (only_token == false || Avg((*token_queue_pointer).RrdPointer, 0) > (*token_queue_pointer).RatePerSecond) {
 
 		for {
+
+			if (token.MaxWait != nil && time.Now().Sub(token.Time) >= (*token.MaxWait)) {
+
+				// this token has a MaxWait that is at least now
+				break
+
+			}
 
 			// find the rate of the pending tokens
 			var pending_tokens_rate uint64
