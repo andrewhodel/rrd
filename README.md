@@ -121,8 +121,8 @@ type TokenQueue struct {
 	// the sum of each Token.Size allowed per second
 	RatePerSecond			float64
 	Tokens				[]*Token
-	// 0 works with QueueToken and UnqueueToken
-	// 1 works with WaitToCompleteToken
+	// rrd.Working with QueueToken and UnqueueToken
+	// rrd.Instant with WaitToCompleteToken
 	Type				uint8
 	RrdPointer			*Rrd
 	sync.RWMutex
@@ -139,16 +139,16 @@ type Token struct {
 }
 ```
 
-## rrd.WorkingInbound
+## rrd.Working
 
-This is used to write to disk or with extremely large RAM writes that require time.
+This is used to read/write to disk or with extremely large RAM writes that require time.
 
-It can be best understood as something is arriving and there is work to do because of it.
+It can be understood as something is arriving and there is work to do because of it and the time spent doing the work matters of the calculated rate.
 
 ```go
 // create a rrd.TokenQueue that limits disk writing at 200MB/s
 var token_queue_pointer *rrd.TokenQueue
-rrd.SetTokenQueueLimiter(&token_queue_pointer, 200 * 1000 * 1000, rrd.WorkingInbound)
+rrd.SetTokenQueueLimiter(&token_queue_pointer, 200 * 1000 * 1000, rrd.Working)
 
 // write 2000MB to disk from 50,000 goroutines
 var count = 0
@@ -177,16 +177,18 @@ for {
 }
 ```
 
-## rrd.InstantOutbound
+## rrd.Instant
 
 This is used to write to a buffer that's expected to be instant like a socket buffer.
 
 It can be best understood as something is being sent instantly to a TCP buffer that very quickly sends it to another router's inbound TCP queues.
 
+The time spent doing the work is always much faster than the input or output rate being shaped and `rrd.Instant` requires less processing.
+
 ```go
 // create a rrd.TokenQueue that limits data sent to a TCP socket at 400 KB/s
 var token_queue_pointer *rrd.TokenQueue
-rrd.SetTokenQueueLimiter(&token_queue_pointer, 400 * 1000, rrd.InstantOutbound)
+rrd.SetTokenQueueLimiter(&token_queue_pointer, 400 * 1000, rrd.Instant)
 
 for {
 
@@ -197,7 +199,7 @@ for {
 
     rrd.WaitToken(token_queue_pointer, write_size, 0)
 
-    // this is `instant` enough to work with rrd.InstantOutbound
+    // this is `instant` enough to work with rrd.Instant
     socket.Write(data_to_send)
 
 }

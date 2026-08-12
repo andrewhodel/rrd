@@ -41,8 +41,8 @@ const (
 	Gauge uint8 = 1
 
 	// token queue types
-	WorkingInbound uint8 = 0
-	InstantOutbound uint8 = 1
+	Working uint8 = 0
+	Instant uint8 = 1
 
 )
 
@@ -967,7 +967,7 @@ func WaitToken(token_queue_pointer *TokenQueue, size uint64, prio uint64) {
 	// when it's known that writing the data is instant
 	// for example, writing to a socket buffer that is immediately sent to another router's buffer
 
-	// only for TokenQueue.Type == rrd.InstantOutbound
+	// only for TokenQueue.Type == rrd.Instant
 
 	var token Token
 	token.Size = size
@@ -976,9 +976,9 @@ func WaitToken(token_queue_pointer *TokenQueue, size uint64, prio uint64) {
 
 	(*token_queue_pointer).Lock()
 
-	if ((*token_queue_pointer).Type != InstantOutbound) {
+	if ((*token_queue_pointer).Type != Instant) {
 
-		fmt.Println("WaitToken requires TokenQueue.Type == rrd.InstantOutbound.")
+		fmt.Println("WaitToken requires TokenQueue.Type == rrd.Instant.")
 		os.Exit(1)
 
 	} else if ((*token_queue_pointer).RatePerSecond == 0) {
@@ -1071,7 +1071,7 @@ func QueueToken(token_queue_pointer *TokenQueue, size uint64, prio uint64) (*Tok
 	// called to place a token in the token queue
 	// and blocks until the token can begin
 
-	// only for TokenQueue.Type == rrd.WorkingInbound
+	// only for TokenQueue.Type == rrd.Working
 
 	var token Token
 	token.Size = size
@@ -1082,9 +1082,9 @@ func QueueToken(token_queue_pointer *TokenQueue, size uint64, prio uint64) (*Tok
 
 	(*token_queue_pointer).Lock()
 
-	if ((*token_queue_pointer).Type != WorkingInbound) {
+	if ((*token_queue_pointer).Type != Working) {
 
-		fmt.Println("QueueToken requires TokenQueue.Type == rrd.WorkingInbound.")
+		fmt.Println("QueueToken requires TokenQueue.Type == rrd.Working.")
 		os.Exit(1)
 
 	} else if ((*token_queue_pointer).RatePerSecond == 0) {
@@ -1184,16 +1184,11 @@ func QueueToken(token_queue_pointer *TokenQueue, size uint64, prio uint64) (*Tok
 					var duration_since_first_pending_token = time.Now().Sub((*first_pending_time))
 					var actual_pending_tokens_rate = float64(pending_tokens_rate) / duration_since_first_pending_token.Seconds()
 
-					if ((*token_queue_pointer).RatePerSecond > actual_pending_tokens_rate) {
+					if ((*token_queue_pointer).RatePerSecond > rrd_avg + actual_pending_tokens_rate) {
 
 						// the rate per second of the TokenQueue has not been breached by Pending tokens
-
-						if (rrd_avg < (*token_queue_pointer).RatePerSecond) {
-
-							// the rate per second of the TokenQueue has not been breached overall
-							break
-
-						}
+						// the rate per second of the TokenQueue has not been breached overall
+						break
 
 					}
 
