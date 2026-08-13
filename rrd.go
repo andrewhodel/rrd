@@ -870,6 +870,7 @@ type TokenQueue struct {
 	// 1 works with WaitToCompleteToken
 	Type				uint8
 	RrdPointer			*Rrd
+	Cond				*sync.Cond
 	Cancel				context.CancelFunc
 	sync.RWMutex
 }
@@ -885,6 +886,13 @@ type Token struct {
 	MaxWait				*time.Duration
 }
 
+type LockLess struct {
+}
+func (ll *LockLess) Lock() {
+}
+func (ll *LockLess) Unlock() {
+}
+
 func SetTokenQueueLimiter(token_queue_pointer **TokenQueue, rate_per_second float64, token_queue_type uint8) {
 
 	if (*token_queue_pointer == nil) {
@@ -898,6 +906,10 @@ func SetTokenQueueLimiter(token_queue_pointer **TokenQueue, rate_per_second floa
 		// create RRD
 		var rrd_pointer Rrd
 		token_queue.RrdPointer = &rrd_pointer
+
+		// create Cond
+		var cond_mutex LockLess
+		token_queue.Cond = sync.NewCond(&cond_mutex)
 
 		*token_queue_pointer = &token_queue
 
@@ -933,8 +945,8 @@ func SetTokenQueueLimiter(token_queue_pointer **TokenQueue, rate_per_second floa
 
 				if (ctx.Err() != nil) {
 
-					// cancel the context
-					(**token_queue_pointer).Cancel()
+					// user called TokenQueue.Cancel
+					// end the RRD update loop
 
 					// nil Cancel in order that another is created if SetTokenQueueLimiter is ran again
 					(**token_queue_pointer).Cancel = nil
@@ -950,7 +962,9 @@ func SetTokenQueueLimiter(token_queue_pointer **TokenQueue, rate_per_second floa
 
 				(**token_queue_pointer).Unlock()
 
-				time.Sleep(time.Millisecond * 50)
+				(*(**token_queue_pointer).Cond).Broadcast()
+
+				time.Sleep(time.Millisecond * 170)
 
 			}
 
@@ -1069,9 +1083,11 @@ func WaitToken(token_queue_pointer *TokenQueue, size uint64, prio uint64, max_wa
 
 		(*token_queue_pointer).RUnlock()
 
-		time.Sleep(time.Microsecond * 200)
+		(*(*token_queue_pointer).Cond).Wait()
 
 	}
+
+	(*(*token_queue_pointer).Cond).Broadcast()
 
 }
 
@@ -1213,11 +1229,9 @@ func QueueToken(token_queue_pointer *TokenQueue, size uint64, prio uint64, max_w
 
 			}
 
-			// wait long enough for a token to complete
-			// this needs to be low enough to handle the RatePerSecond of the queue
 			// 200 microsecond iterations and 80MB per iteration is 400GB/s
 			// and 1 million concurrent QueueToken calls would use all 5ghz of one CPU core running at 5ghz
-			time.Sleep(time.Microsecond * 200)
+			(*(*token_queue_pointer).Cond).Wait()
 
 		}
 
@@ -1257,5 +1271,7 @@ func UnqueueToken(token_queue_pointer *TokenQueue, token_pointer *Token) {
 	}
 
 	(*token_queue_pointer).Unlock()
+
+	(*(*token_queue_pointer).Cond).Broadcast()
 
 }
