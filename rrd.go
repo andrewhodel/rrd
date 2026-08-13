@@ -343,6 +343,14 @@ func Avg(rrdPtr *Rrd, index int) (float64) {
 
 func Dump(rrdPtr *Rrd) {
 
+	if (rrdPtr == nil) {
+		fmt.Println("rrdPtr is nil.")
+		return
+	} else if ((*rrdPtr).FirstUpdateTs == nil) {
+		fmt.Println("rrdPtr.FirstUpdateTs is nil, still waiting on first rrd.Update.")
+		return
+	}
+
 	fmt.Printf("rrdPtr: CurrentAvgCount %d, FirstUpdateTs %d, LastUpdate: %s\n", (*rrdPtr).CurrentAvgCount, (*(*rrdPtr).FirstUpdateTs), (*rrdPtr).LastUpdate.Format(time.Kitchen))
 	fmt.Println("rrdPtr LastUpdateDataPoint:")
 
