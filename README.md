@@ -12,16 +12,16 @@ __rrd.Rrd__
 
 ```go
 type Rrd struct {
-	D								[][]float64			`json:"d"`
-	R								[][]float64			`json:"r"`
+	D								[][]*float64		`json:"d"`
+	R								[][]*float64		`json:"r"`
 	CurrentStep						int64				`json:"currentStep"`
 	CurrentAvgCount					int64				`json:"currentAvgCount"`
 	FirstUpdateTs					*int64				`json:"firstUpdateTs"`
-	LastUpdateDataPoint				[]float64			`json:"lastUpdateDataPoint"`
+	LastUpdateDataPoint				[]*float64			`json:"lastUpdateDataPoint"`
 }
 ```
 
-__rrd.Update(intervalSeconds int64, totalSteps int64, dataType string, updateDataPoint []float64, rrdPtr *Rrd)__
+__rrd.Update(intervalSeconds int64, totalSteps int64, dataType string, updateDataPoint []*float64, rrdPtr *Rrd)__
 
 Updates an Rrd struct via a pointer.
 
@@ -32,7 +32,7 @@ totalSteps							int64				total steps of data
 dataType							uint8				rrd.Gauge or rrd.Counter
 														Gauge - values that stay within the range of defined integer types, like the value of raw materials.
 														Counter - values that count and can exceed the maximum of a defined integer type.
-updateDataPoint						[]float64			array of data points for the update, must have the same order in following `Update`s.
+updateDataPoint						[]*float64			array of data points for the update, must have the same order in following `Update`s.  Make sure to use `rrd.GetUpdateValues` to support nil values and pointer value copying.
 rrdPtr								*Rrd				pointer to an rrd.Rrd struct
 ```
 
@@ -40,28 +40,28 @@ rrdPtr								*Rrd				pointer to an rrd.Rrd struct
 var rrdPtr Rrd
 
 // 24 hours with 5 minute interval (24 * 60 / 5 samples)
-rrd.Update(false, time.Minute * 5, 24*60/5, rrd.Gauge, []float64 {434, 700}, &rrdPtr)
+rrd.Update(false, time.Minute * 5, 24*60/5, rrd.Gauge, rrd.GetUpdateValues(434, 700), &rrdPtr)
 ```
 
 ```go
 var rrdPtr Rrd
 
 // 30 days with 1 hour interval (30 * 24 samples)
-rrd.Update(false, time.Hour, 30*24, rrd.Gauge, []float64 {434, 700}, &rrdPtr)
+rrd.Update(false, time.Hour, 30*24, rrd.Gauge, rrd.GetUpdateValues(434, 700), &rrdPtr)
 ```
 
 ```go
 var rrdPtr Rrd
 
 // 365 days with 1 day interval (365 samples)
-rrd.Update(false, time.Hour * 24, 365, rrd.Gauge, []float64 {434, 700}, &rrdPtr)
+rrd.Update(false, time.Hour * 24, 365, rrd.Gauge, rrd.GetUpdateValues(434, 700), &rrdPtr)
 ```
 
 ```go
 var rrdPtr Rrd
 
 // 5 seconds with a 1 second interval (5 samples)
-rrd.Update(false, time.Second, 5, rrd.Counter, []float64 {40}, &rrdPtr)
+rrd.Update(false, time.Second, 5, rrd.Counter, []float64 rrd.GetUpdateValues(40), &rrdPtr)
 
 // get average of all data
 // try it with /proc/diskstats field 8 (writes completed)

@@ -102,7 +102,7 @@ func main() {
 				lastm_counter += write_size
 
 				lastm_mutex.Lock()
-				rrd.Update(false, time.Second, 60, rrd.Counter, []float64{float64(lastm_counter)}, &lastm_rrd)
+				rrd.Update(false, time.Second, 60, rrd.Counter, rrd.GetUpdateValues(float64(lastm_counter)), &lastm_rrd)
 				lastm_mutex.Unlock()
 
 				rrd.UnqueueToken(token_queue_pointer, token_pointer)

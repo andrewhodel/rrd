@@ -64,7 +64,9 @@ func main() {
 			return 1
 		})
 
-		var if_counter = []float64 {0, 0}
+		// must be []any to work with rrd.GetUpdateValues
+		var if_counter = []any{float64(0), float64(0)}
+		var if_name string
 
 		for e := range s {
 
@@ -74,7 +76,7 @@ func main() {
 				continue
 			}
 
-			if (strings.Index(n[0], "enp") != -1 || strings.Index(n[0], "eth") != -1 || strings.Index(n[0], "wlan") != -1 || strings.Index(n[0], "wlp") != -1 || strings.Index(n[0], "lo") != -1) {
+			if (strings.Index(n[0], "en") != -1 || strings.Index(n[0], "eth") != -1 || strings.Index(n[0], "wlan") != -1 || strings.Index(n[0], "wlp") != -1 || strings.Index(n[0], "lo") != -1) {
 
 				// bytes in
 				b_in, err := strconv.Atoi(n[1])
@@ -90,15 +92,22 @@ func main() {
 				if_counter[0] = float64(b_in)
 				if_counter[1] = float64(b_out)
 
-				fmt.Printf("%s%s: Bytes In: %d\tBytes Out: %d%s\n\n", "\033[34m", n[0], b_in, b_out, "\033[0m")
+				if_name = strings.TrimSuffix(n[0], ":")
 
-				break
+				if (strings.Index(n[0], "lo") == -1) {
+
+					// look for another interface if localhost
+					break
+
+				}
 
 			}
 
 		}
 
-		rrd.Update(true, time.Second * 8, 10, rrd.Counter, if_counter, &rrdPtr)
+		fmt.Printf("\x1b[34m%s\x1b[0m\n", if_name)
+
+		rrd.Update(true, time.Second * 8, 10, rrd.Counter, rrd.GetUpdateValues(if_counter...), &rrdPtr)
 
 		rrd.Dump(&rrdPtr)
 

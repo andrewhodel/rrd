@@ -27,6 +27,7 @@ import (
 	"sync"
 	"os"
 	"context"
+	"strings"
 )
 
 const (
@@ -47,12 +48,12 @@ const (
 )
 
 type Rrd struct {
-	D			[][]float64	`xyzdb:"D" bson:"D" json:"D"`
-	R			[][]float64	`xyzdb:"R" bson:"R" json:"R"`
+	D			[][]*float64	`xyzdb:"D" bson:"D" json:"D"`
+	R			[][]*float64	`xyzdb:"R" bson:"R" json:"R"`
 	CurrentAvgCount		int64		`xyzdb:"CurrentAvgCount" bson:"CurrentAvgCount" json:"CurrentAvgCount"`
 	// use a pointer for FirstUpdateTs to allow nil values
 	FirstUpdateTs		*time.Time	`xyzdb:"FirstUpdateTs" bson:"FirstUpdateTs" json:"FirstUpdateTs"`
-	LastUpdateDataPoint	[]float64	`xyzdb:"LastUpdateDataPoint" bson:"LastUpdateDataPoint" json:"LastUpdateDataPoint"`
+	LastUpdateDataPoint	[]*float64	`xyzdb:"LastUpdateDataPoint" bson:"LastUpdateDataPoint" json:"LastUpdateDataPoint"`
 	LastUpdate		time.Time	`xyzdb:"LastUpdate" bson:"LastUpdate" json:"LastUpdate"`
 	MinimumDataPoints	uint64		`xyzdb:"MinimumDataPoints" bson:"MinimumDataPoints" json:"MinimumDataPoints"`
 	Interval		time.Duration	`xyzdb:"Interval" bson:"Interval" json:"Interval"`
@@ -316,7 +317,14 @@ func Avg(rrdPtr *Rrd, index int) (float64) {
 		// this is a Gauge rrd
 
 		for n := range (*rrdPtr).R[index] {
-			avg += (*rrdPtr).R[index][n]
+
+			var r_value_pointer = (*rrdPtr).R[index][n]
+
+			if (r_value_pointer == nil) {
+				continue
+			}
+
+			avg += (*r_value_pointer)
 			count += 1
 		}
 
@@ -325,7 +333,14 @@ func Avg(rrdPtr *Rrd, index int) (float64) {
 		// this is a Counter rrd
 
 		for n := range (*rrdPtr).D[index] {
-			avg += (*rrdPtr).D[index][n]
+
+			var d_value_pointer = (*rrdPtr).D[index][n]
+
+			if (d_value_pointer == nil) {
+				continue
+			}
+
+			avg += (*d_value_pointer)
 			count += 1
 		}
 
@@ -355,33 +370,70 @@ func Dump(rrdPtr *Rrd) {
 	fmt.Println("rrdPtr LastUpdateDataPoint:")
 
 	for e := range (*rrdPtr).LastUpdateDataPoint {
-		fmt.Printf("\t%f", (*rrdPtr).LastUpdateDataPoint[e])
+
+		if ((*rrdPtr).LastUpdateDataPoint == nil) {
+			fmt.Println("\tnil")
+		} else {
+			fmt.Printf("\t%f\n", (*(*rrdPtr).LastUpdateDataPoint[e]))
+		}
 	}
 
-	fmt.Println("")
-
-	fmt.Printf("rrdPtr D (Counter VALUES) (%d):\n", len((*rrdPtr).D))
+	fmt.Printf("rrdPtr D (Gauge or Counter VALUES) (%d):\n", len((*rrdPtr).D))
 
 	for e := range (*rrdPtr).D {
-		for n := range (*rrdPtr).D[e] {
-			fmt.Printf("\tInterval %d\t%f", e, (*rrdPtr).D[e][n])
+
+		if ((*rrdPtr).D[e] == nil) {
+			fmt.Println("\tInterval", e, "nil")
+			continue
 		}
-		fmt.Println("")
+
+		var v string
+
+		for n := range (*rrdPtr).D[e] {
+
+			if ((*rrdPtr).D[e][n] != nil) {
+				v += strconv.FormatFloat((*(*rrdPtr).D[e][n]), 'f', 2, 64) + ", "
+			} else {
+				v += "nil, "
+			}
+
+		}
+
+		v = strings.TrimSuffix(v, ", ")
+
+		fmt.Printf("\tInterval %d\t%s\n", e, v)
+
 	}
 
-	fmt.Println("")
-
 	if ((*rrdPtr).R != nil) {
+
 		fmt.Printf("rrdPtr R (RATE PER SECOND OF Counter INTERVALS) (%d):\n", len((*rrdPtr).R))
 
 		for e := range (*rrdPtr).R {
-			for n := range (*rrdPtr).R[e] {
-				fmt.Printf("\tInterval %d\t%f", e, (*rrdPtr).R[e][n])
+
+			if ((*rrdPtr).R[e] == nil) {
+				fmt.Println("\tInterval", e, "nil")
+				continue
 			}
-			fmt.Println("")
+
+			var v string
+
+			for n := range (*rrdPtr).R[e] {
+
+				if ((*rrdPtr).R[e][n] != nil) {
+					v += strconv.FormatFloat((*(*rrdPtr).R[e][n]), 'f', 2, 64) + ", "
+				} else {
+					v += "nil, "
+				}
+
+			}
+
+			v = strings.TrimSuffix(v, ", ")
+
+			fmt.Printf("\tInterval %d\t%s\n", e, v)
+
 		}
 
-		fmt.Println("")
 	}
 
 }
@@ -413,28 +465,32 @@ func RecalculateRate(interval time.Duration, totalSteps int64, rrdPtr *Rrd) {
 
 			for l := range (*rrdPtr).D[e] {
 
-				var previousPoint = (*rrdPtr).D[e-1][l]
-				var currentPoint = (*rrdPtr).D[e][l]
+				var previous_value_pointer = (*rrdPtr).D[e-1][l]
+				var current_value_pointer = (*rrdPtr).D[e][l]
+
+				if (previous_value_pointer == nil || current_value_pointer == nil) {
+					continue
+				}
 
 				// get the value of the interval
-				var intervalValue float64 = currentPoint - previousPoint
+				var intervalValue float64 = (*current_value_pointer) - (*previous_value_pointer)
 
 				// check for a counter reset
 				// known by this update value being less than the previous
-				if (previousPoint > currentPoint) {
+				if ((*previous_value_pointer) > (*current_value_pointer)) {
 
 					// the counter has reset, need to check if this happened near the 32 or 64 bit limit
 
-					if (previousPoint < math.MaxUint32 && previousPoint > math.MaxUint32 * .7) {
+					if ((*previous_value_pointer) < math.MaxUint32 && (*previous_value_pointer) > math.MaxUint32 * .7) {
 
 						// the last update was between 70% and 100% of the 32 bit uint limit
 						// make 32bit adjustments
 
-						// add the remainder of subtracting the last data point from the 32 bit limit to the currentPoint
+						// add the remainder of subtracting the last data point from the 32 bit limit to the (*current_value_pointer)
 						// use it for rate calculation
-						intervalValue = currentPoint + math.MaxUint32 - previousPoint
+						intervalValue = (*current_value_pointer) + math.MaxUint32 - (*previous_value_pointer)
 
-					} else if (previousPoint < math.MaxUint64 && previousPoint > math.MaxUint64 * .7) {
+					} else if ((*previous_value_pointer) < math.MaxUint64 && (*previous_value_pointer) > math.MaxUint64 * .7) {
 
 						// the rrd struct number types are currently Float64 (with a limit less than Uint64)
 						// this rrd library must be upgraded to use math/big floats anyway
@@ -442,9 +498,9 @@ func RecalculateRate(interval time.Duration, totalSteps int64, rrdPtr *Rrd) {
 						// the last update was between 70% and 100% of the 64 bit uint limit
 						// make 64bit adjustments
 
-						// add the remainder of subtracting the last data point from the 64 bit limit to the currentPoint
+						// add the remainder of subtracting the last data point from the 64 bit limit to the (*current_value_pointer)
 						// use it for rate calculation
-						intervalValue = currentPoint + math.MaxUint64 - previousPoint
+						intervalValue = (*current_value_pointer) + math.MaxUint64 - (*previous_value_pointer)
 
 					}
 
@@ -452,7 +508,7 @@ func RecalculateRate(interval time.Duration, totalSteps int64, rrdPtr *Rrd) {
 
 				// set the rate per second as a float
 				var rate float64 = intervalValue / float64(interval.Seconds())
-				(*rrdPtr).R[e] = append((*rrdPtr).R[e], rate)
+				(*rrdPtr).R[e] = append((*rrdPtr).R[e], &rate)
 
 			}
 
@@ -462,7 +518,7 @@ func RecalculateRate(interval time.Duration, totalSteps int64, rrdPtr *Rrd) {
 
 }
 
-func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8, updateDataPoint []float64, rrdPtr *Rrd) {
+func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8, updateDataPoint []*float64, rrdPtr *Rrd) {
 
 	// all timing is based on system time at execution of Update
 	// data can be sent from any time zone, even ones you don't know about yet
@@ -492,13 +548,13 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 				if (len((*rrdPtr).R[n]) == 0) {
 					// skip [] values
 				} else if (len((*rrdPtr).R[n]) != int((*rrdPtr).MinimumDataPoints)) {
-					// add zeroes
+					// add nil values
 					var cur_len = len((*rrdPtr).R[n])
 					var new_value_count = int((*rrdPtr).MinimumDataPoints) - cur_len
 					var l = 0
 					for (l < new_value_count) {
-						// add a zero for each new field
-						(*rrdPtr).R[n] = append((*rrdPtr).R[n], float64(0))
+						// add nil for each new field
+						(*rrdPtr).R[n] = append((*rrdPtr).R[n], nil)
 						l = l + 1
 					}
 				}
@@ -509,13 +565,13 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 			if (len((*rrdPtr).D[n]) == 0) {
 				// skip [] values
 			} else if (len((*rrdPtr).D[n]) != int((*rrdPtr).MinimumDataPoints)) {
-				// add zeroes
+				// add nil values
 				var cur_len = len((*rrdPtr).D[n])
 				var new_value_count = int((*rrdPtr).MinimumDataPoints) - cur_len
 				var l = 0
 				for (l < new_value_count) {
-					// add a zero for each new field
-					(*rrdPtr).D[n] = append((*rrdPtr).D[n], float64(0))
+					// add nil for each new field
+					(*rrdPtr).D[n] = append((*rrdPtr).D[n], nil)
 					l = l + 1
 				}
 			}
@@ -539,19 +595,28 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 	//
 	// returns rrd.Rrd with update added
 
-	if debug { fmt.Println("\n" + colorCodeRed + "### NEW " + dataType_string(dataType) + " UPDATE ###" + colorCodeReset) }
-	if debug { fmt.Println("interval:", interval) }
-	if debug { fmt.Println("totalSteps: " + strconv.FormatInt(totalSteps, 10)) }
-	if ((*rrdPtr).FirstUpdateTs != nil) {
-		if debug { fmt.Println("firstUpdateTs:", (*(*rrdPtr).FirstUpdateTs), updateTimeStamp.Sub((*(*rrdPtr).FirstUpdateTs)), "ago") }
-	}
-	if debug { fmt.Println("updateTimeStamp:", updateTimeStamp) }
-	if debug { fmt.Println("updateDataPoint:") }
+	if debug {
 
-	for e := range updateDataPoint {
-		if debug { fmt.Printf("\t%f", updateDataPoint[e]) }
+		fmt.Println("\n" + colorCodeRed + "### NEW " + dataType_string(dataType) + " UPDATE ###" + colorCodeReset)
+		fmt.Println("interval:", interval)
+		fmt.Println("totalSteps: " + strconv.FormatInt(totalSteps, 10))
+		if ((*rrdPtr).FirstUpdateTs != nil) {
+			fmt.Println("firstUpdateTs:", (*(*rrdPtr).FirstUpdateTs), updateTimeStamp.Sub((*(*rrdPtr).FirstUpdateTs)), "ago")
+		}
+		fmt.Println("updateTimeStamp:", updateTimeStamp)
+		fmt.Println("updateDataPoint:")
+
+		for e := range updateDataPoint {
+
+			if (updateDataPoint[e] == nil) {
+				fmt.Println("\tnil")
+			} else {
+				fmt.Printf("\t%f\n", (*updateDataPoint[e]))
+			}
+
+		}
+
 	}
-	if debug { fmt.Println("") }
 
 	// store updateDataPoint array as lastUpdateDataPoint
 	(*rrdPtr).LastUpdateDataPoint = updateDataPoint
@@ -559,22 +624,31 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 
 	// first need to see if this is the first update or not
 	if ((*rrdPtr).FirstUpdateTs == nil) {
+
 		// this is the first update
 		if debug { fmt.Println(colorCodeBlue + "### INSERTING FIRST UPDATE ###" + colorCodeReset) }
 
 		// create the array of data points
-		(*rrdPtr).D = make([][]float64, totalSteps)
+		(*rrdPtr).D = make([][]*float64, totalSteps)
 		if (dataType == Counter) {
 			// Counter
-			(*rrdPtr).R = make([][]float64, totalSteps)
+			(*rrdPtr).R = make([][]*float64, totalSteps)
 		}
 
 		// insert the data for each data point
 		for e := range updateDataPoint {
-			if debug { fmt.Printf("\t%f", updateDataPoint[e]) }
+
+			if debug {
+				if (updateDataPoint[e] == nil) {
+					fmt.Println("\tnil")
+				} else {
+					fmt.Printf("\t%f\n", (*updateDataPoint[e]))
+				}
+			}
+
 			(*rrdPtr).D[0] = append((*rrdPtr).D[0], updateDataPoint[e])
+
 		}
-		if debug { fmt.Println("") }
 
 		// set the firstUpdateTs by first allocating space, then assigning the value
 		(*rrdPtr).FirstUpdateTs = &updateTimeStamp
@@ -593,11 +667,11 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 			if (dataType == Counter) {
 				// counter types need a rate calculation
 				(*rrdPtr).R = nil
-				(*rrdPtr).R = make([][]float64, totalSteps)
+				(*rrdPtr).R = make([][]*float64, totalSteps)
 			}
 
 			(*rrdPtr).D = nil
-			(*rrdPtr).D = make([][]float64, totalSteps)
+			(*rrdPtr).D = make([][]*float64, totalSteps)
 
 		}
 
@@ -652,7 +726,7 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 
 					// shift the data set
 
-					var temp = make([][]float64, totalSteps)
+					var temp = make([][]*float64, totalSteps)
 					for e := range (*rrdPtr).D {
 
 						if (int64(e) >= shift) {
@@ -673,7 +747,7 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 
 						// shift the existing rates
 
-						var temp = make([][]float64, totalSteps)
+						var temp = make([][]*float64, totalSteps)
 						for e := range (*rrdPtr).R {
 
 							if (int64(e) >= shift) {
@@ -727,13 +801,14 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 				// for each data point
 				for e := range updateDataPoint {
 
-					if ((*rrdPtr).D[currentStep-1] == nil) {
+					if ((*rrdPtr).D[currentStep-1] == nil || updateDataPoint[e] == nil) {
 
 						if debug {
 							fmt.Printf("Previous interval is nil\n")
 						}
 
 						// only insert the data, there is no previous interval data to calculate a rate with
+						// and no way to calculate a rate from a nil value
 						(*rrdPtr).D[currentStep] = append((*rrdPtr).D[currentStep], updateDataPoint[e])
 
 						continue
@@ -742,25 +817,25 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 
 					// calculate the rate because this is a counter
 					// get the value of the interval
-					var intervalValue float64 = updateDataPoint[e]-(*rrdPtr).D[currentStep-1][e]
+					var intervalValue float64 = (*updateDataPoint[e]) - (*(*rrdPtr).D[currentStep-1][e])
 
 					// check for a counter reset
 					// known by this update value being less than the previous
-					if ((*rrdPtr).D[currentStep-1][e] > updateDataPoint[e]) {
+					if ((*(*rrdPtr).D[currentStep-1][e]) > (*updateDataPoint[e])) {
 
 						// the counter has reset, need to check if this happened near the 32 or 64 bit limit
 						if debug { fmt.Println(colorCodeBlue + "counter reset" + colorCodeReset) }
 
-						if ((*rrdPtr).D[currentStep-1][e] < math.MaxUint32 && (*rrdPtr).D[currentStep-1][e] > math.MaxUint32 * .7) {
+						if ((*(*rrdPtr).D[currentStep-1][e]) < math.MaxUint32 && (*(*rrdPtr).D[currentStep-1][e]) > math.MaxUint32 * .7) {
 
 							// the last update was between 70% and 100% of the 32 bit uint limit
 							// make 32bit adjustments
 
 							// add the remainder of subtracting the last data point from the 32 bit limit to the updateDataPoint
 							// use it for rate calculation
-							intervalValue = updateDataPoint[e] + math.MaxUint32 - (*rrdPtr).D[currentStep-1][e]
+							intervalValue = (*updateDataPoint[e]) + math.MaxUint32 - (*(*rrdPtr).D[currentStep-1][e])
 
-						} else if ((*rrdPtr).D[currentStep-1][e] < math.MaxUint64 && (*rrdPtr).D[currentStep-1][e] > math.MaxUint64 * .7) {
+						} else if ((*(*rrdPtr).D[currentStep-1][e]) < math.MaxUint64 && (*(*rrdPtr).D[currentStep-1][e]) > math.MaxUint64 * .7) {
 
 							// the rrd struct number types are currently Float64 (with a limit less than Uint64)
 							// this rrd library must be upgraded to use math/big floats anyway
@@ -770,7 +845,7 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 
 							// add the remainder of subtracting the last data point from the 64 bit limit to the updateDataPoint
 							// use it for rate calculation
-							intervalValue = updateDataPoint[e] + math.MaxUint64 - (*rrdPtr).D[currentStep-1][e]
+							intervalValue = (*updateDataPoint[e]) + math.MaxUint64 - (*(*rrdPtr).D[currentStep-1][e])
 
 						}
 
@@ -780,10 +855,11 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 					// set the rate per second as a float
 					var rate float64 = intervalValue / float64(interval.Seconds())
 					if debug { fmt.Println("inserting data with rate " + strconv.FormatFloat(rate, 'f', -1, 64) + " per second at time slot " + strconv.FormatInt(currentStep, 10)) }
-					(*rrdPtr).R[currentStep] = append((*rrdPtr).R[currentStep], rate)
+					(*rrdPtr).R[currentStep] = append((*rrdPtr).R[currentStep], &rate)
 
 					// insert the data
-					(*rrdPtr).D[currentStep] = append((*rrdPtr).D[currentStep], updateDataPoint[e])
+					var value_copy = (*updateDataPoint[e])
+					(*rrdPtr).D[currentStep] = append((*rrdPtr).D[currentStep], &value_copy)
 
 				}
 
@@ -806,16 +882,21 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 				// need to do this for each data point
 				for e := range updateDataPoint {
 
+					if (updateDataPoint[e] == nil) {
+						// a nil value shouldn't remove existing nil values of the same step
+						continue
+					}
+
 					var avg float64
 
 					// average with a value in the same step
 					if debug { fmt.Println("average with a value in the same step") }
 
 					// multiply the avgCount with the existing value
-					avg = float64((*rrdPtr).CurrentAvgCount) * (*rrdPtr).D[currentStep][e]
+					avg = float64((*rrdPtr).CurrentAvgCount) * (*(*rrdPtr).D[currentStep][e])
 
 					// add this updateDataPoint
-					avg += updateDataPoint[e]
+					avg += (*updateDataPoint[e])
 
 					// increment the avg count
 					(*rrdPtr).CurrentAvgCount++
@@ -824,7 +905,7 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 					avg = avg/float64((*rrdPtr).CurrentAvgCount)
 
 					if debug { fmt.Println("updating data point with avg " + strconv.FormatFloat(avg, 'f', -1, 64)) }
-					(*rrdPtr).D[currentStep][e] = avg
+					(*rrdPtr).D[currentStep][e] = &avg
 
 
 				}
@@ -835,6 +916,12 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 
 				// set the counter on this step to that of this update
 				for e := range updateDataPoint {
+
+					if (updateDataPoint[e] == nil) {
+						// a nil value shouldn't remove existing nil values of the same step
+						continue
+					}
+
 					(*rrdPtr).D[currentStep][e] = updateDataPoint[e]
 				}
 
@@ -966,7 +1053,7 @@ func SetTokenQueueLimiter(token_queue_pointer **TokenQueue, rate_per_second floa
 				(**token_queue_pointer).Lock()
 
 				// update the RRD to keep track of the rate
-				Update(false, time.Second, 5, Counter, []float64{float64((*token_queue_pointer).Sum)}, (*token_queue_pointer).RrdPointer)
+				Update(false, time.Second, 5, Counter, GetUpdateValues(float64((*token_queue_pointer).Sum)), (*token_queue_pointer).RrdPointer)
 
 				(**token_queue_pointer).Unlock()
 
@@ -981,6 +1068,34 @@ func SetTokenQueueLimiter(token_queue_pointer **TokenQueue, rate_per_second floa
 	}
 
 	(**token_queue_pointer).Unlock()
+
+}
+
+func GetUpdateValues(values ...any) ([]*float64) {
+
+	// used to create a []*float64 for rrd.Update that does not access original data but accepts nil values
+
+	var retval []*float64
+
+	for _, value := range values {
+
+		switch v := value.(type) {
+			case float64:
+				var vv = v
+				retval = append(retval, &vv)
+			case *float64:
+				var vv = (*v)
+				retval = append(retval, &vv)
+			case nil:
+				retval = append(retval, nil)
+			default:
+				fmt.Printf("rrd.GetUpdateValues requires parameters that are float64, *float64 or nil.  value is of type: %T\n", v)
+				os.Exit(1)
+		}
+
+	}
+
+	return retval
 
 }
 
