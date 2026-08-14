@@ -304,7 +304,7 @@ func Avg(rrdPtr *Rrd, index int) (float64) {
 
 	// return the average of all the values in the Rrd at index
 
-	if ((*rrdPtr).D == nil || (*rrdPtr).D[index] == nil) {
+	if ((*rrdPtr).D == nil || (*rrdPtr).D[0] == nil) {
 		// no data
 		return 0
 	}
@@ -316,9 +316,14 @@ func Avg(rrdPtr *Rrd, index int) (float64) {
 
 		// this is a Gauge rrd
 
-		for n := range (*rrdPtr).R[index] {
+		for n := range (*rrdPtr).R {
 
-			var r_value_pointer = (*rrdPtr).R[index][n]
+			if (len((*rrdPtr).R[n]) < index + 1) {
+				// the rate of this interval has not been calculated yet
+				continue
+			}
+
+			var r_value_pointer = (*rrdPtr).R[n][index]
 
 			if (r_value_pointer == nil) {
 				continue
@@ -326,15 +331,16 @@ func Avg(rrdPtr *Rrd, index int) (float64) {
 
 			avg += (*r_value_pointer)
 			count += 1
+
 		}
 
 	} else {
 
 		// this is a Counter rrd
 
-		for n := range (*rrdPtr).D[index] {
+		for n := range (*rrdPtr).D {
 
-			var d_value_pointer = (*rrdPtr).D[index][n]
+			var d_value_pointer = (*rrdPtr).D[n][index]
 
 			if (d_value_pointer == nil) {
 				continue
@@ -455,17 +461,33 @@ func RecalculateRate(interval time.Duration, totalSteps int64, rrdPtr *Rrd) {
 				continue
 			}
 
-			if ((*rrdPtr).D[e-1] == nil) {
+			var steps_between int = 1
+			var skip = false
 
-				// the previous point set has no data
-				// go to the next
-				continue
+			for {
+
+				if (e - steps_between == -1) {
+					// no previous interval has data
+					skip = true
+					break
+				} else if ((*rrdPtr).D[e-steps_between] == nil) {
+
+					// the previous interval (point set) has no data
+					// go to the next
+					continue
+
+				}
 
 			}
 
-			for l := range (*rrdPtr).D[e] {
+			if (skip == true) {
+				// no previous interval has data
+				continue
+			}
 
-				var previous_value_pointer = (*rrdPtr).D[e-1][l]
+			for l := range (*rrdPtr).D[e - steps_between] {
+
+				var previous_value_pointer = (*rrdPtr).D[e - steps_between][l]
 				var current_value_pointer = (*rrdPtr).D[e][l]
 
 				if (previous_value_pointer == nil || current_value_pointer == nil) {
@@ -507,8 +529,28 @@ func RecalculateRate(interval time.Duration, totalSteps int64, rrdPtr *Rrd) {
 				}
 
 				// set the rate per second as a float
-				var rate float64 = intervalValue / float64(interval.Seconds())
-				(*rrdPtr).R[e] = append((*rrdPtr).R[e], &rate)
+				var rate float64 = intervalValue / (float64(interval.Seconds()) * float64(steps_between))
+
+				for {
+
+					var interval = e + 1 - steps_between
+
+					if (len((*rrdPtr).R[interval]) == 0) {
+						// add rate
+						(*rrdPtr).R[interval] = append((*rrdPtr).R[interval], &rate)
+					} else {
+						// change existing rate
+						(*rrdPtr).R[interval][e] = &rate
+					}
+
+					if (steps_between == 1) {
+						// all intervals updated
+						break
+					}
+
+					steps_between -= 1
+
+				}
 
 			}
 
@@ -801,41 +843,72 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 				// for each data point
 				for e := range updateDataPoint {
 
-					if ((*rrdPtr).D[currentStep-1] == nil || updateDataPoint[e] == nil) {
+					// add the updateDataPoint to D
+					(*rrdPtr).D[currentStep] = append((*rrdPtr).D[currentStep], updateDataPoint[e])
 
-						if debug {
-							fmt.Printf("Previous interval is nil\n")
+					var steps_between int64 = 1
+
+					if ((*rrdPtr).D[currentStep - steps_between] == nil) {
+
+						// the previous interval has no data
+						// find the one before it that does
+
+						var skip = false
+
+						for {
+
+							if (currentStep - steps_between == -1) {
+								// no previous interval has data
+								skip = true
+								break
+							} else if ((*rrdPtr).D[currentStep - steps_between] == nil) {
+								// this previous interval does not have data
+								steps_between += 1
+								continue
+							}
+
+							// this interval has data
+							break
+
 						}
 
-						// only insert the data, there is no previous interval data to calculate a rate with
-						// and no way to calculate a rate from a nil value
-						(*rrdPtr).D[currentStep] = append((*rrdPtr).D[currentStep], updateDataPoint[e])
+						if debug {
+							fmt.Printf("Previous %d intervals are nil.\n", steps_between)
+						}
 
+						if (skip == true) {
+							// no previous interval has data
+							continue
+						}
+
+					} else if (updateDataPoint[e] == nil) {
+
+						// there is no way to calculate a rate from a nil value
 						continue
 
 					}
 
 					// calculate the rate because this is a counter
 					// get the value of the interval
-					var intervalValue float64 = (*updateDataPoint[e]) - (*(*rrdPtr).D[currentStep-1][e])
+					var intervalValue float64 = (*updateDataPoint[e]) - (*(*rrdPtr).D[currentStep - steps_between][e])
 
 					// check for a counter reset
 					// known by this update value being less than the previous
-					if ((*(*rrdPtr).D[currentStep-1][e]) > (*updateDataPoint[e])) {
+					if ((*(*rrdPtr).D[currentStep - steps_between][e]) > (*updateDataPoint[e])) {
 
 						// the counter has reset, need to check if this happened near the 32 or 64 bit limit
 						if debug { fmt.Println(colorCodeBlue + "counter reset" + colorCodeReset) }
 
-						if ((*(*rrdPtr).D[currentStep-1][e]) < math.MaxUint32 && (*(*rrdPtr).D[currentStep-1][e]) > math.MaxUint32 * .7) {
+						if ((*(*rrdPtr).D[currentStep - steps_between][e]) < math.MaxUint32 && (*(*rrdPtr).D[currentStep - steps_between][e]) > math.MaxUint32 * .7) {
 
 							// the last update was between 70% and 100% of the 32 bit uint limit
 							// make 32bit adjustments
 
 							// add the remainder of subtracting the last data point from the 32 bit limit to the updateDataPoint
 							// use it for rate calculation
-							intervalValue = (*updateDataPoint[e]) + math.MaxUint32 - (*(*rrdPtr).D[currentStep-1][e])
+							intervalValue = (*updateDataPoint[e]) + math.MaxUint32 - (*(*rrdPtr).D[currentStep - steps_between][e])
 
-						} else if ((*(*rrdPtr).D[currentStep-1][e]) < math.MaxUint64 && (*(*rrdPtr).D[currentStep-1][e]) > math.MaxUint64 * .7) {
+						} else if ((*(*rrdPtr).D[currentStep - steps_between][e]) < math.MaxUint64 && (*(*rrdPtr).D[currentStep - steps_between][e]) > math.MaxUint64 * .7) {
 
 							// the rrd struct number types are currently Float64 (with a limit less than Uint64)
 							// this rrd library must be upgraded to use math/big floats anyway
@@ -845,21 +918,39 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 
 							// add the remainder of subtracting the last data point from the 64 bit limit to the updateDataPoint
 							// use it for rate calculation
-							intervalValue = (*updateDataPoint[e]) + math.MaxUint64 - (*(*rrdPtr).D[currentStep-1][e])
+							intervalValue = (*updateDataPoint[e]) + math.MaxUint64 - (*(*rrdPtr).D[currentStep - steps_between][e])
 
 						}
 
 					}
 
 					if debug { fmt.Println("calculating the rate for " + strconv.FormatFloat(intervalValue, 'f', -1, 64) + " units within", interval) }
-					// set the rate per second as a float
-					var rate float64 = intervalValue / float64(interval.Seconds())
-					if debug { fmt.Println("inserting data with rate " + strconv.FormatFloat(rate, 'f', -1, 64) + " per second at time slot " + strconv.FormatInt(currentStep, 10)) }
-					(*rrdPtr).R[currentStep] = append((*rrdPtr).R[currentStep], &rate)
 
-					// insert the data
-					var value_copy = (*updateDataPoint[e])
-					(*rrdPtr).D[currentStep] = append((*rrdPtr).D[currentStep], &value_copy)
+					// set the rate per second as a float
+					var rate float64 = intervalValue / (float64(interval.Seconds()) * float64(steps_between))
+
+					for {
+
+						var interval int64 = currentStep + 1 - steps_between
+
+						if debug { fmt.Println("inserting data with rate " + strconv.FormatFloat(rate, 'f', -1, 64) + " per second at time slot " + strconv.FormatInt(interval, 10)) }
+
+						if (len((*rrdPtr).R[interval]) == 0) {
+							// add rate
+							(*rrdPtr).R[interval] = append((*rrdPtr).R[interval], &rate)
+						} else {
+							// change existing rate
+							(*rrdPtr).R[interval][e] = &rate
+						}
+
+						if (steps_between == 1) {
+							// all intervals updated
+							break
+						}
+
+						steps_between -= 1
+
+					}
 
 				}
 

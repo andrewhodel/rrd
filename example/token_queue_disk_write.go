@@ -16,9 +16,9 @@ func main() {
 
 	// create a rrd.TokenQueue that limits disk writing at 15MB/s
 	var token_queue_pointer *rrd.TokenQueue
-	rrd.SetTokenQueueLimiter(&token_queue_pointer, 200 * 1000 * 1000, rrd.Working)
+	rrd.SetTokenQueueLimiter(&token_queue_pointer, 15 * 1000 * 1000, rrd.Working)
 
-	fmt.Println("Starting 3 goroutines each writing data to a rrd.TokenQueue using a rrd.Token.Size that changes every 30 seconds.")
+	fmt.Println("Starting 3 goroutines each writing data to a rrd.TokenQueue using a rrd.Token.Size that changes every 30 seconds and is limited at 15MB/s.")
 
 	var token_size atomic.Uint64
 	// first token size 4KB
@@ -58,14 +58,18 @@ func main() {
 
 			time.Sleep(time.Second * 30)
 
-			// use a token size between 4KB and 60MB
+			// use a token size between 2KB and 8KB
+
 			// 5GHZ at 4KB is 20 terabytes a second
 			// meaning .001% of a 5ghz CPU core is 20GB/s at 4KB write per cycle
-			// but, often write sizes are set much higher than that because of how data arrives and the TokenQueue still needs to work
-			var extra = uint64(mrand.IntN(1000 * 1000 * 60))
 
-			if (extra < 4000) {
-				extra = 4000;
+			// if you have a write size larger than that, you have a fast data medium
+			// and τ probably hasn't increased CPU speeds
+
+			var extra = uint64(mrand.IntN(8000))
+
+			if (extra < 2000) {
+				extra = 2000;
 			}
 
 			fmt.Println("\x1b[1;31mchanging token size to: " + Bytes_to_size_string(extra) + "\x1b[0m\n\n")
