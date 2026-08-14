@@ -1,4 +1,4 @@
-go-rrd - a [r]ound [r]obin [d]atabase library
+go-rrd - a [r]ound [r]obin [d]ata library
 
 # Installation
 `go get github.com/andrewhodel/rrd`
@@ -7,6 +7,16 @@ Documentation
 =============
 
 # Rrd
+
+RRD is round robin data, also known as a time series data.
+
+## Examples
+
+On a POSIX system:
+
+1. `example/example.go` shows network interface traffic statistics.  https://www.youtube.com/watch?v=rWf1zqOcAag
+2. `example/interpolation.go` shows how to get a rate value from a network interface range based on the size of an input buffer and based on the current IO rate of a disk.
+3. `example/token_queue_disk_write.go` shows how to use `rrd.TokenQueue` to limit write speed to a disk.
 
 __rrd.Rrd__
 
@@ -87,25 +97,17 @@ __rrd.Dump(rrdPtr *Rrd)__
 
 Print the Rrd to the screen in a readable format.
 
-## Example
-
-On a linux system you can run `example/example.go` to show network interface traffic statistics.
-
-## Video of the Example
-
-https://www.youtube.com/watch?v=rWf1zqOcAag
-
-## Rate Interval
-
-The rates are stored as a `float64` with a 1 second interval, providing nanosecond resolution.
-
 ## Mutex
+
+Writes to `rrd.Rrd` must be one at a time, reads can be concurrent.
 
 Use `sync.RWMutex` to write to the rrd with `rrd.Update` in `Lock` and read in `RLock`.
 
 `DebugMutex` from https://gist.github.com/andrewhodel/ed7625a14eb87404cafd37493849d1ba is helpful.
 
 # Interpolation
+
+Interpolation is used to map a number of a range to another range based on a pre-defined curve.
 
 __rrd.Interpolation__
 
@@ -128,7 +130,15 @@ Return the output value of the interpolation that is the farthest in the `Output
 
 # Token Bucket Rate Limiting
 
-Each token has a size and the rate of transfer/transmit is applied by and to all `rrd.Token` of a `rrd.TokenQueue`.
+`rrd.TokenQueue` is used to manage rate limiting, tokens each with a unique size allow input to be tracked with priority and maximum wait time.
+
+```
+Token size: 4.00KB              last 5s rate: 12.21MB/s           last 1m rate: 15.51MB/s
+Token size: 4.00KB              last 5s rate: 12.21MB/s           last 1m rate: 13.96MB/s
+Token size: 4.00KB              last 5s rate: 11.31MB/s           last 1m rate: 16.57MB/s
+```
+
+Each `rrd.Token` has a size and the cumulative rate of transfer/transmit set in `rrd.TokenQueue` is applied to all `rrd.Token`.
 
 ```go
 type TokenQueue struct {
@@ -226,7 +236,7 @@ for {
 
 `example/interpolation.go` shows how to know the desired rate of a network interface based on the size of an input buffer and the disk activity.
 
-Pattern/Sequence/Routine/Design/Order/Arrangement/Model/Structure Matching
+Pattern Matching
 ========
 
 Read `patterns/patterns.go`.
