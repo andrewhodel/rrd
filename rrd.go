@@ -551,7 +551,7 @@ func RecalculateRate(interval time.Duration, totalSteps int64, rrdPtr *Rrd) {
 
 					var interval = e + 1 - steps_between
 
-					if (len((*rrdPtr).R[interval]) == 0) {
+					if (len((*rrdPtr).R[interval]) <= e) {
 						// add rate
 						(*rrdPtr).R[interval] = append((*rrdPtr).R[interval], &rate)
 					} else {
@@ -951,7 +951,7 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 
 						if debug { fmt.Println("inserting data with rate " + strconv.FormatFloat(rate, 'f', -1, 64) + " per second at time slot " + strconv.FormatInt(interval, 10)) }
 
-						if (len((*rrdPtr).R[interval]) == 0) {
+						if (len((*rrdPtr).R[interval]) <= e) {
 							// add rate
 							(*rrdPtr).R[interval] = append((*rrdPtr).R[interval], &rate)
 						} else {
