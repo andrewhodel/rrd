@@ -7,7 +7,6 @@ import (
 	"io"
 	mrand "math/rand/v2"
 	"time"
-	"sync"
 )
 
 func main() {
@@ -25,22 +24,14 @@ func main() {
 	token_size.Store(4000)
 	fmt.Println("\x1b[1;31mfirst token size:", Bytes_to_size_string(4000), "\x1b[0m\n\n")
 
-	// TokenQueue stores the rate of the last 5s internally, keep the rate of the last minute also
-	var lastm_rrd rrd.Rrd
-	var lastm_mutex sync.RWMutex
-	var lastm_counter uint64
-
 	// print the rate
 	go func() {
 
 		for {
 
-			lastm_mutex.RLock()
-			var mavg = rrd.Avg(&lastm_rrd, 0)
-			lastm_mutex.RUnlock()
-
 			(*token_queue_pointer).RLock()
-			var avg = rrd.Avg((*token_queue_pointer).RrdPointer, 0)
+			var avg = rrd.Avg(0, (*token_queue_pointer).RrdPointer)
+			var mavg = rrd.Avg(0, (*token_queue_pointer).LongRrdPointer)
 			(*token_queue_pointer).RUnlock()
 
 			fmt.Printf("Token size: %-20slast 5s rate: %-20slast 1m rate: %-20s\n", Bytes_to_size_string(token_size.Load()), Bytes_to_size_string(uint64(avg)) + "/s", Bytes_to_size_string(uint64(mavg)) + "/s")
@@ -102,12 +93,6 @@ func main() {
 
 				// write to /dev/null (io.Discard works with non Posix OS)
 				io.Discard.Write(data_to_write)
-
-				lastm_counter += write_size
-
-				lastm_mutex.Lock()
-				rrd.Update(false, time.Second, 60, rrd.Counter, rrd.GetUpdateValues(float64(lastm_counter)), &lastm_rrd)
-				lastm_mutex.Unlock()
 
 				rrd.UnqueueToken(token_queue_pointer, token_pointer)
 

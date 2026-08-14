@@ -300,65 +300,81 @@ func InterpolateValue(validate_input bool, interpolations []Interpolation) (erro
 
 }
 
-func Avg(rrdPtr *Rrd, index int) (float64) {
+func Avg(index int, rrdPtrs ...*Rrd) (float64) {
 
 	// return the average of all the values in the Rrd at index
 
-	if ((*rrdPtr).D == nil || (*rrdPtr).D[0] == nil) {
-		// no data
-		return 0
-	}
+	// if there are multiple Rrd, return the highest value
+	// this is explained best in TokenQueue using multiple RRD to track changes
 
-	var avg float64
-	var count float64
+	var highest_avg float64
 
-	if ((*rrdPtr).R != nil) {
+	for l := range rrdPtrs {
 
-		// this is a Gauge rrd
+		var rrdPtr = rrdPtrs[l]
 
-		for n := range (*rrdPtr).R {
+		if ((*rrdPtr).D == nil || (*rrdPtr).D[0] == nil) {
+			// no data
+			// proceed to next rrdPtr
+			continue
+		}
 
-			if (len((*rrdPtr).R[n]) < index + 1) {
-				// the rate of this interval has not been calculated yet
-				continue
+		var avg float64
+		var count float64
+
+		if ((*rrdPtr).R != nil) {
+
+			// this is a Gauge rrd
+
+			for n := range (*rrdPtr).R {
+
+				if (len((*rrdPtr).R[n]) < index + 1) {
+					// the rate of this interval has not been calculated yet
+					continue
+				}
+
+				var r_value_pointer = (*rrdPtr).R[n][index]
+
+				if (r_value_pointer == nil) {
+					continue
+				}
+
+				avg += (*r_value_pointer)
+				count += 1
+
 			}
 
-			var r_value_pointer = (*rrdPtr).R[n][index]
+		} else {
 
-			if (r_value_pointer == nil) {
-				continue
+			// this is a Counter rrd
+
+			for n := range (*rrdPtr).D {
+
+				var d_value_pointer = (*rrdPtr).D[n][index]
+
+				if (d_value_pointer == nil) {
+					continue
+				}
+
+				avg += (*d_value_pointer)
+				count += 1
 			}
-
-			avg += (*r_value_pointer)
-			count += 1
 
 		}
 
-	} else {
+		if (avg > 0) {
 
-		// this is a Counter rrd
+			avg = avg / count
 
-		for n := range (*rrdPtr).D {
+		}
 
-			var d_value_pointer = (*rrdPtr).D[n][index]
-
-			if (d_value_pointer == nil) {
-				continue
-			}
-
-			avg += (*d_value_pointer)
-			count += 1
+		if (l == 0 || avg > highest_avg) {
+			highest_avg = avg
 		}
 
 	}
 
-	if (avg > 0) {
-
-		avg = avg / count
-
-	}
-
-	return avg
+	return highest_avg
 
 }
 
@@ -1056,6 +1072,7 @@ type TokenQueue struct {
 	// 1 works with WaitToCompleteToken
 	Type				uint8
 	RrdPointer			*Rrd
+	LongRrdPointer			*Rrd
 	Cond				*sync.Cond
 	Cancel				context.CancelFunc
 	sync.RWMutex
@@ -1092,6 +1109,8 @@ func SetTokenQueueLimiter(token_queue_pointer **TokenQueue, rate_per_second floa
 		// create RRD
 		var rrd_pointer Rrd
 		token_queue.RrdPointer = &rrd_pointer
+		var long_rrd_pointer Rrd
+		token_queue.LongRrdPointer = &long_rrd_pointer
 
 		// create Cond
 		var cond_mutex LockLess
@@ -1111,6 +1130,8 @@ func SetTokenQueueLimiter(token_queue_pointer **TokenQueue, rate_per_second floa
 		// create RRD
 		var rrd_pointer Rrd
 		(**token_queue_pointer).RrdPointer = &rrd_pointer
+		var long_rrd_pointer Rrd
+		(**token_queue_pointer).LongRrdPointer = &long_rrd_pointer
 
 		(**token_queue_pointer).Unlock()
 
@@ -1145,6 +1166,7 @@ func SetTokenQueueLimiter(token_queue_pointer **TokenQueue, rate_per_second floa
 
 				// update the RRD to keep track of the rate
 				Update(false, time.Second, 5, Counter, GetUpdateValues(float64((*token_queue_pointer).Sum)), (*token_queue_pointer).RrdPointer)
+				Update(false, time.Second, 60, Counter, GetUpdateValues(float64((*token_queue_pointer).Sum)), (*token_queue_pointer).LongRrdPointer)
 
 				(**token_queue_pointer).Unlock()
 
@@ -1234,7 +1256,7 @@ func WaitToken(token_queue_pointer *TokenQueue, size uint64, prio uint64, max_wa
 
 		(*token_queue_pointer).RLock()
 
-		if (Avg((*token_queue_pointer).RrdPointer, 0) > (*token_queue_pointer).RatePerSecond) {
+		if (Avg(0, (*token_queue_pointer).LongRrdPointer, (*token_queue_pointer).RrdPointer) > (*token_queue_pointer).RatePerSecond) {
 
 			// the rate is higher than TokenQueue.RatePerSecond
 			// wait
@@ -1346,7 +1368,7 @@ func QueueToken(token_queue_pointer *TokenQueue, size uint64, prio uint64, max_w
 
 	(*token_queue_pointer).Unlock()
 
-	if (only_token == false || Avg((*token_queue_pointer).RrdPointer, 0) > (*token_queue_pointer).RatePerSecond) {
+	if (only_token == false || Avg(0, (*token_queue_pointer).LongRrdPointer, (*token_queue_pointer).RrdPointer) > (*token_queue_pointer).RatePerSecond) {
 
 		for {
 
@@ -1369,7 +1391,7 @@ func QueueToken(token_queue_pointer *TokenQueue, size uint64, prio uint64, max_w
 
 			(*token_queue_pointer).RLock()
 
-			var rrd_avg = Avg((*token_queue_pointer).RrdPointer, 0)
+			var rrd_avg = Avg(0, (*token_queue_pointer).LongRrdPointer, (*token_queue_pointer).RrdPointer)
 
 			for l := range (*token_queue_pointer).Tokens {
 

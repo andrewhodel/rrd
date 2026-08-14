@@ -66,7 +66,21 @@ rrd.Update(false, time.Second, 5, rrd.Counter, []float64 rrd.GetUpdateValues(40)
 // get average of all data
 // try it with /proc/diskstats field 8 (writes completed)
 // this is the rate per second of writes completed averaged through the last 5 seconds
-var avg = rrd.Avg(&rrdPtr, 0)
+var avg = rrd.Avg(0, &rrdPtr)
+```
+
+```go
+// rrd.Avg can accept any number of *rrd.Rrd to result a stable rate (read example/token_queue_disk_write.go)
+var rrdPtr Rrd
+var rrdPtrLong Rrd
+
+// 5 seconds with a 1 second interval (5 samples)
+rrd.Update(false, time.Second, 5, rrd.Counter, []float64 rrd.GetUpdateValues(40), &rrdPtr)
+// 60 seconds with a 1 second interval (60 samples)
+rrd.Update(false, time.Second, 60, rrd.Counter, []float64 rrd.GetUpdateValues(40), &rrdPtrLong)
+
+// get average of all data
+var avg = rrd.Avg(0, &rrdPtr, &rrdPtrLong)
 ```
 
 __rrd.Dump(rrdPtr *Rrd)__
