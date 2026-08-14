@@ -1071,6 +1071,8 @@ type TokenQueue struct {
 	// 0 works with QueueToken and UnqueueToken
 	// 1 works with WaitToCompleteToken
 	Type				uint8
+	// the first second
+	FSRrdPointer			*Rrd
 	RrdPointer			*Rrd
 	LongRrdPointer			*Rrd
 	Cond				*sync.Cond
@@ -1107,6 +1109,8 @@ func SetTokenQueueLimiter(token_queue_pointer **TokenQueue, rate_per_second floa
 		token_queue.Type = token_queue_type
 
 		// create RRD
+		var first_second_rrd_pointer Rrd
+		token_queue.FSRrdPointer = &first_second_rrd_pointer
 		var rrd_pointer Rrd
 		token_queue.RrdPointer = &rrd_pointer
 		var long_rrd_pointer Rrd
@@ -1128,6 +1132,8 @@ func SetTokenQueueLimiter(token_queue_pointer **TokenQueue, rate_per_second floa
 		(**token_queue_pointer).Type = token_queue_type
 
 		// create RRD
+		var first_second_rrd_pointer Rrd
+		(**token_queue_pointer).FSRrdPointer = &first_second_rrd_pointer
 		var rrd_pointer Rrd
 		(**token_queue_pointer).RrdPointer = &rrd_pointer
 		var long_rrd_pointer Rrd
@@ -1165,6 +1171,7 @@ func SetTokenQueueLimiter(token_queue_pointer **TokenQueue, rate_per_second floa
 				(**token_queue_pointer).Lock()
 
 				// update the RRD to keep track of the rate
+				Update(false, time.Millisecond * 10, 100, Counter, GetUpdateValues(float64((*token_queue_pointer).Sum)), (*token_queue_pointer).FSRrdPointer)
 				Update(false, time.Second, 5, Counter, GetUpdateValues(float64((*token_queue_pointer).Sum)), (*token_queue_pointer).RrdPointer)
 				Update(false, time.Second, 60, Counter, GetUpdateValues(float64((*token_queue_pointer).Sum)), (*token_queue_pointer).LongRrdPointer)
 
@@ -1225,6 +1232,22 @@ func WaitToken(token_queue_pointer *TokenQueue, size uint64, prio uint64, max_wa
 	token.Prio = prio
 	token.Time = time.Now()
 	token.MaxWait = max_wait
+
+	for {
+
+		// this is the average per 10ms
+		(*token_queue_pointer).RLock()
+		var first_second_avg = Avg(0, (*token_queue_pointer).FSRrdPointer)
+		(*token_queue_pointer).RUnlock()
+
+		if (first_second_avg * 100 > (*token_queue_pointer).RatePerSecond) {
+			time.Sleep(time.Millisecond * 170)
+			continue
+		}
+
+		break
+
+	}
 
 	(*token_queue_pointer).Lock()
 
@@ -1294,6 +1317,9 @@ func WaitToken(token_queue_pointer *TokenQueue, size uint64, prio uint64, max_wa
 				(*token_queue_pointer).Lock()
 
 				(*token_queue_pointer).Sum += token.Size
+
+				// there are 100 10ms intervals in 1 second
+				Update(false, time.Millisecond * 10, 100, Counter, GetUpdateValues(float64((*token_queue_pointer).Sum)), (*token_queue_pointer).FSRrdPointer)
 
 				for l := range (*token_queue_pointer).Tokens {
 
@@ -1367,6 +1393,22 @@ func QueueToken(token_queue_pointer *TokenQueue, size uint64, prio uint64, max_w
 	}
 
 	(*token_queue_pointer).Unlock()
+
+	for {
+
+		// this is the average per 10ms
+		(*token_queue_pointer).RLock()
+		var first_second_avg = Avg(0, (*token_queue_pointer).FSRrdPointer)
+		(*token_queue_pointer).RUnlock()
+
+		if (first_second_avg * 100 > (*token_queue_pointer).RatePerSecond) {
+			time.Sleep(time.Millisecond * 170)
+			continue
+		}
+
+		break
+
+	}
 
 	if (only_token == false || Avg(0, (*token_queue_pointer).LongRrdPointer, (*token_queue_pointer).RrdPointer) > (*token_queue_pointer).RatePerSecond) {
 
@@ -1478,6 +1520,9 @@ func QueueToken(token_queue_pointer *TokenQueue, size uint64, prio uint64, max_w
 	(*token_queue_pointer).Sum += token.Size
 
 	token.Pending = true
+
+	// there are 100 10ms intervals in 1 second
+	Update(false, time.Millisecond * 10, 100, Counter, GetUpdateValues(float64((*token_queue_pointer).Sum)), (*token_queue_pointer).FSRrdPointer)
 
 	(*token_queue_pointer).Unlock()
 
