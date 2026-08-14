@@ -1,15 +1,16 @@
-rrd - a [r]ound [r]obin [d]ata library
+**rrd** - a [r]ound [r]obin [d]ata library
 
 RRD is round robin data, also known as time series data.
 
 # Installation
-`go get github.com/andrewhodel/rrd`
+
+Works on all OS.
+
+Install the module with `go get github.com/andrewhodel/rrd`.
 
 # Examples
 
-On a POSIX system:
-
-1. `example/example.go` shows network interface traffic statistics.  https://www.youtube.com/watch?v=rWf1zqOcAag
+1. `example/example.go` shows network interface traffic statistics (requires unix `ifconfig`).  https://www.youtube.com/watch?v=rWf1zqOcAag
 2. `example/interpolation.go` shows how to get a rate value from a network interface range based on the size of an input buffer and based on the current IO rate of a disk.
 3. `example/token_queue_disk_write.go` shows how to use `rrd.TokenQueue` to limit write speed to a disk.
 
