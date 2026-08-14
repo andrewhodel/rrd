@@ -1235,13 +1235,22 @@ func WaitToken(token_queue_pointer *TokenQueue, size uint64, prio uint64, max_wa
 
 	for {
 
-		// this is the average per 10ms
+		if (token.MaxWait != nil && time.Now().Sub(token.Time) >= (*token.MaxWait)) {
+
+			// this token has a MaxWait that is at least now
+			break
+
+		}
+
 		(*token_queue_pointer).RLock()
+
+		// this is the average per 10ms
 		var first_second_avg = Avg(0, (*token_queue_pointer).FSRrdPointer)
+
 		(*token_queue_pointer).RUnlock()
 
 		if (first_second_avg * 100 > (*token_queue_pointer).RatePerSecond) {
-			time.Sleep(time.Millisecond * 170)
+			time.Sleep(time.Millisecond * 10)
 			continue
 		}
 
@@ -1385,24 +1394,37 @@ func QueueToken(token_queue_pointer *TokenQueue, size uint64, prio uint64, max_w
 
 	(*token_queue_pointer).Tokens = append((*token_queue_pointer).Tokens, &token)
 
-	if (len((*token_queue_pointer).Tokens) == 1) {
-
-		// the token added is the only token
-		only_token = true
-
-	}
-
 	(*token_queue_pointer).Unlock()
 
 	for {
 
-		// this is the average per 10ms
+		if (token.MaxWait != nil && time.Now().Sub(token.Time) >= (*token.MaxWait)) {
+
+			// this token has a MaxWait that is at least now
+			break
+
+		}
+
 		(*token_queue_pointer).RLock()
+
+		// this is the average per 10ms
 		var first_second_avg = Avg(0, (*token_queue_pointer).FSRrdPointer)
+
+		if (len((*token_queue_pointer).Tokens) == 1) {
+
+			// this token is the only token
+			only_token = true
+
+		} else {
+
+			only_token = false
+
+		}
+
 		(*token_queue_pointer).RUnlock()
 
 		if (first_second_avg * 100 > (*token_queue_pointer).RatePerSecond) {
-			time.Sleep(time.Millisecond * 170)
+			time.Sleep(time.Millisecond * 10)
 			continue
 		}
 
