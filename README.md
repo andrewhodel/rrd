@@ -175,7 +175,7 @@ type Token struct {
 }
 ```
 
-## TokenQueue.Type rrd.Working
+## TokenQueue.Type `rrd.Working`
 
 This is used to read/write to disk or with extremely large RAM writes that require time.
 
@@ -215,7 +215,7 @@ for {
 }
 ```
 
-## TokenQueue.Type rrd.Instant
+## TokenQueue.Type `rrd.Instant`
 
 This is used to write to a buffer that's expected to be instant like a socket buffer.
 

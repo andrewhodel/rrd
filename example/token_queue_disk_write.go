@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"github.com/andrewhodel/rrd"
-	"sync/atomic"
 	"io"
 	mrand "math/rand/v2"
 	"time"
@@ -17,13 +16,7 @@ func main() {
 	var token_queue_pointer *rrd.TokenQueue
 	rrd.SetTokenQueueLimiter(&token_queue_pointer, 15 * 1000 * 1000, rrd.Working)
 
-	fmt.Println("\n\nStarting 120 goroutines each writing data to a \x1b[1;33mrrd.TokenQueue limited to 15MB/s\x1b[0m each using a \x1b[1;34mrrd.Token.Size that is random between 0 and 200KB\x1b[0m.")
-
-	var token_size atomic.Uint64
-	// first token size 4KB
-	token_size.Store(4000)
-
-	fmt.Println("\n\x1b[1;31mfirst token size:", rrd.Bytes_to_size_string(4000), "\x1b[0m\n\n")
+	fmt.Println("\n\nStarting 120 goroutines each writing data to a \x1b[1;33mrrd.TokenQueue limited to 15MB/s\x1b[0m each using a \x1b[1;34mrrd.Token.Size that is random between 0 and 200KB\x1b[0m.\n\n")
 
 	// print the rate
 	go func() {
@@ -42,7 +35,7 @@ func main() {
 
 			(*token_queue_pointer).RUnlock()
 
-			fmt.Printf("Token size: %-20slast %s rate: %-20slast %s rate: %-20slast %s rate: %-20s\n", rrd.Bytes_to_size_string(token_size.Load()), interval, rrd.Bytes_to_size_string(uint64(avg)) + "/s", mid_interval, rrd.Bytes_to_size_string(uint64(mid_avg)), long_interval, rrd.Bytes_to_size_string(uint64(long_avg)) + "/s")
+			fmt.Printf("last %s rate: %-20slast %s rate: %-20slast %s rate: %-20s\n", interval, rrd.Bytes_to_size_string(uint64(avg)) + "/s", mid_interval, rrd.Bytes_to_size_string(uint64(mid_avg)), long_interval, rrd.Bytes_to_size_string(uint64(long_avg)) + "/s")
 
 			time.Sleep(time.Millisecond * 200)
 
