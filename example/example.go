@@ -32,16 +32,16 @@ func main() {
 
 		if (update_count == 65) {
 
-			// simulate missed updates
-			fmt.Printf("simulating 12 seconds of missed updates\n")
-			time.Sleep(12 * time.Second)
+			// miss 3 seconds of updates
+			fmt.Printf("\x1b[1;31m3 seconds of missed updates...\x1b[0m\n")
+			time.Sleep(3 * time.Second)
 			update_count += 1
 			continue
 
 		} else if (update_count == 15) {
 
 			fmt.Println("recalculating rates")
-			rrd.RecalculateRate(8, 10, &if_rrd)
+			rrd.RecalculateRate(&if_rrd)
 			update_count += 1
 			continue
 

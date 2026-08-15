@@ -462,19 +462,23 @@ func Dump(rrdPtr *Rrd) {
 
 }
 
-func RecalculateRate(interval time.Duration, totalSteps int64, rrdPtr *Rrd) {
+func RecalculateRate(rrdPtr *Rrd) {
 
 	// recalculate the rate values if the R array exists
 
 	if ((*rrdPtr).R != nil) {
 
 		// for each data point
+		//for e := len((*rrdPtr).R) - 1; e >= 0; e-- {
 		for e := range (*rrdPtr).R {
 
 			// reset the rate values
 			(*rrdPtr).R[e] = nil
 
-			if (e == 0) {
+			if ((*rrdPtr).D[e] == nil) {
+				// skip nil D values
+				continue
+			} else if (e == 0) {
 				// skip the first point set, there is nothing to calculate the rate against
 				continue
 			}
@@ -485,16 +489,23 @@ func RecalculateRate(interval time.Duration, totalSteps int64, rrdPtr *Rrd) {
 			for {
 
 				if (e - steps_between == -1) {
+
 					// no previous interval has data
 					skip = true
 					break
+
 				} else if ((*rrdPtr).D[e-steps_between] == nil) {
 
 					// the previous interval (point set) has no data
 					// go to the next
+					steps_between += 1
+
 					continue
 
 				}
+
+				// this interval has data
+				break
 
 			}
 
@@ -547,7 +558,7 @@ func RecalculateRate(interval time.Duration, totalSteps int64, rrdPtr *Rrd) {
 				}
 
 				// set the rate per second as a float
-				var rate float64 = intervalValue / (float64(interval.Seconds()) * float64(steps_between))
+				var rate float64 = intervalValue / (float64((*rrdPtr).Interval.Seconds()) * float64(steps_between))
 
 				for {
 
@@ -884,7 +895,7 @@ func Update(updateDataPoint []*float64, rrdPtr *Rrd) {
 								continue
 							}
 
-							// this (*rrdPtr).Interval has data
+							// this interval has data
 							break
 
 						}
