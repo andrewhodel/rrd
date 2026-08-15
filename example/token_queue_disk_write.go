@@ -30,12 +30,18 @@ func main() {
 		for {
 
 			(*token_queue_pointer).RLock()
+
 			var avg = rrd.Avg(0, (*token_queue_pointer).RrdPointer)
-			var midavg = rrd.Avg(0, (*token_queue_pointer).MidRrdPointer)
-			var longavg = rrd.Avg(0, (*token_queue_pointer).LongRrdPointer)
+			var mid_avg = rrd.Avg(0, (*token_queue_pointer).MidRrdPointer)
+			var long_avg = rrd.Avg(0, (*token_queue_pointer).LongRrdPointer)
+
+			var interval = time.Duration((*(*token_queue_pointer).RrdPointer).Interval * time.Duration((*(*token_queue_pointer).RrdPointer).TotalSteps)).String()
+			var mid_interval = time.Duration((*(*token_queue_pointer).MidRrdPointer).Interval * time.Duration((*(*token_queue_pointer).MidRrdPointer).TotalSteps)).String()
+			var long_interval = time.Duration((*(*token_queue_pointer).LongRrdPointer).Interval * time.Duration((*(*token_queue_pointer).LongRrdPointer).TotalSteps)).String()
+
 			(*token_queue_pointer).RUnlock()
 
-			fmt.Printf("Token size: %-20slast 3s rate: %-20slast 10s rate: %-20slast 30s rate: %-20s\n", Bytes_to_size_string(token_size.Load()), Bytes_to_size_string(uint64(avg)) + "/s", Bytes_to_size_string(uint64(midavg)), Bytes_to_size_string(uint64(longavg)) + "/s")
+			fmt.Printf("Token size: %-20slast %s rate: %-20slast %s rate: %-20slast %s rate: %-20s\n", Bytes_to_size_string(token_size.Load()), interval, Bytes_to_size_string(uint64(avg)) + "/s", mid_interval, Bytes_to_size_string(uint64(mid_avg)), long_interval, Bytes_to_size_string(uint64(long_avg)) + "/s")
 
 			time.Sleep(time.Millisecond * 200)
 

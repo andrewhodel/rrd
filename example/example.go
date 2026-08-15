@@ -18,28 +18,33 @@ func check(e error) {
 
 func main() {
 
-	var rrdPtr rrd.Rrd
+	var if_rrd rrd.Rrd
+	if_rrd.Interval = time.Second
+	if_rrd.TotalSteps = 10
+	if_rrd.DataType = rrd.Counter
+	if_rrd.Debug = true
 
 	var update_count = 0
 
-	for (true) {
+	for {
 
 		fmt.Println("\nupdate number", update_count)
 
-		if (update_count == 5) {
+		if (update_count == 65) {
+
 			// simulate missed updates
 			fmt.Printf("simulating 12 seconds of missed updates\n")
 			time.Sleep(12 * time.Second)
 			update_count += 1
 			continue
-		}
 
-		if (update_count == 15) {
-			// perform a recalculate of the rates
-			fmt.Printf("recalculating rates")
-			rrd.RecalculateRate(8, 10, &rrdPtr)
+		} else if (update_count == 15) {
+
+			fmt.Println("recalculating rates")
+			rrd.RecalculateRate(8, 10, &if_rrd)
 			update_count += 1
 			continue
+
 		}
 
 		dat, err := ioutil.ReadFile("/proc/net/dev")
@@ -107,11 +112,11 @@ func main() {
 
 		fmt.Printf("\x1b[34m%s\x1b[0m\n", if_name)
 
-		rrd.Update(true, time.Second * 8, 10, rrd.Counter, rrd.GetUpdateValues(if_counter...), &rrdPtr)
+		rrd.Update(rrd.GetUpdateValues(if_counter...), &if_rrd)
 
-		rrd.Dump(&rrdPtr)
+		rrd.Dump(&if_rrd)
 
-		time.Sleep(5 * time.Second)
+		time.Sleep(time.Millisecond * 500)
 
 		update_count += 1
 

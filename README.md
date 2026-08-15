@@ -4,7 +4,7 @@ RRD is round robin data, also known as time series data.
 
 # Installation
 
-Works on all OS.
+Works on all OS with Golang support.
 
 Install the module with `go get github.com/andrewhodel/rrd`.
 
@@ -18,82 +18,88 @@ Install the module with `go get github.com/andrewhodel/rrd`.
 
 __rrd.Rrd__
 
+`Interval`, `TotalSteps` and `DataType` must be set.
+
+`DataType` must be:
+
+1. `rrd.Counter` used for counters that increase or stay the same every update, supports `rollover, overflow and reset`.
+2. `rrd.Gauge` used for measurements that are within a known range.
+
 ```go
 type Rrd struct {
-	D								[][]*float64		`json:"d"`
-	R								[][]*float64		`json:"r"`
-	CurrentStep						int64				`json:"currentStep"`
-	CurrentAvgCount					int64				`json:"currentAvgCount"`
-	FirstUpdateTs					*int64				`json:"firstUpdateTs"`
-	LastUpdateDataPoint				[]*float64			`json:"lastUpdateDataPoint"`
+	D					[][]*float64	`xyzdb:"D" bson:"D" json:"D"`
+	R					[][]*float64	`xyzdb:"R" bson:"R" json:"R"`
+	CurrentAvgCount		int64			`xyzdb:"CurrentAvgCount" bson:"CurrentAvgCount" json:"CurrentAvgCount"`
+	FirstUpdateTs		*time.Time		`xyzdb:"FirstUpdateTs" bson:"FirstUpdateTs" json:"FirstUpdateTs"`
+	LastUpdateDataPoint	[]*float64		`xyzdb:"LastUpdateDataPoint" bson:"LastUpdateDataPoint" json:"LastUpdateDataPoint"`
+	LastUpdate			time.Time		`xyzdb:"LastUpdate" bson:"LastUpdate" json:"LastUpdate"`
+	MinimumDataPoints	uint64			`xyzdb:"MinimumDataPoints" bson:"MinimumDataPoints" json:"MinimumDataPoints"`
+	Interval			time.Duration	`xyzdb:"Interval" bson:"Interval" json:"Interval"`
+	TotalSteps			uint64			`xyzdb:"TotalSteps" bson:"TotalSteps" json:"TotalSteps"`
+	DataType			uint8			`xyzdb:"DataType" bson:"DataType" json:"DataType"`
+	Debug				bool			`json:"-"`
 }
 ```
 
-__rrd.Update(intervalSeconds int64, totalSteps int64, dataType string, updateDataPoint []*float64, rrdPtr *Rrd)__
+__rrd.Update(updateDataPoint []*float64, rrdPtr *Rrd)__
 
 Updates an Rrd struct via a pointer.
 
-```
-debug								bool				output debug to console
-interval							int64				ideal time between updates
-totalSteps							int64				total steps of data
-dataType							uint8				rrd.Gauge or rrd.Counter
-														Gauge - values that stay within the range of defined integer types, like the value of raw materials.
-														Counter - values that count and can exceed the maximum of a defined integer type.
-updateDataPoint						[]*float64			array of data points for the update, must have the same order in following `Update`s.  Make sure to use `rrd.GetUpdateValues` to support nil values and pointer value copying.
-rrdPtr								*Rrd				pointer to an rrd.Rrd struct
-```
-
 ```go
-var rrdPtr Rrd
-
 // 24 hours with 5 minute interval (24 * 60 / 5 samples)
-rrd.Update(false, time.Minute * 5, 24*60/5, rrd.Gauge, rrd.GetUpdateValues(434, 700), &rrdPtr)
+var rrd_5m rrd.Rrd
+rrd_5m.Interval = time.Minute * 5
+rrd_5m.TotalSteps = 24 * 60 / 5
+rrd_5m.DataType = rrd.Gauge
+
+rrd.Update(rrd.GetUpdateValues(434, 700), &rrd_5m)
 ```
 
 ```go
-var rrdPtr Rrd
-
 // 30 days with 1 hour interval (30 * 24 samples)
-rrd.Update(false, time.Hour, 30*24, rrd.Gauge, rrd.GetUpdateValues(434, 700), &rrdPtr)
+var rrd_1h rrd.Rrd
+rrd_1h.Interval = time.Hour
+rrd_1hTotalSteps = 30 * 24
+rrd_1h.DataType = rrd.Gauge
+
+rrd.Update(rrd.GetUpdateValues(434, 700), &rrd_1h)
 ```
 
 ```go
-var rrdPtr Rrd
-
 // 365 days with 1 day interval (365 samples)
-rrd.Update(false, time.Hour * 24, 365, rrd.Gauge, rrd.GetUpdateValues(434, 700), &rrdPtr)
+var rrd_1d rrd.Rrd
+rrd_1d.Interval = time.Hour * 24
+rrd_1dTotalSteps = 365
+rrd_1d.DataType = rrd.Gauge
+
+rrd.Update(rrd.GetUpdateValues(434, 700), &rrd_1d)
 ```
 
-```go
-var rrdPtr Rrd
-
-// 5 seconds with a 1 second interval (5 samples)
-rrd.Update(false, time.Second, 5, rrd.Counter, []float64 rrd.GetUpdateValues(40), &rrdPtr)
-
-// get average of all data
-// try it with /proc/diskstats field 8 (writes completed)
-// this is the rate per second of writes completed averaged through the last 5 seconds
-var avg = rrd.Avg(0, &rrdPtr)
-```
+`rrd.Avg` can accept any number of `*rrd.Rrd` to result a stable rate.
 
 ```go
-// rrd.Avg can accept any number of *rrd.Rrd to result a stable rate (read example/token_queue_disk_write.go)
-var rrdPtr Rrd
-var rrdPtrLong Rrd
-
 // 5 seconds with a 1 second interval (5 samples)
-rrd.Update(false, time.Second, 5, rrd.Counter, []float64 rrd.GetUpdateValues(40), &rrdPtr)
+var rrd_short Rrd
+rrd_short.Interval = time.Second
+rrd_short.TotalSteps = 5
+rrd_short.DataType = rrd.Counter
+
 // 60 seconds with a 1 second interval (60 samples)
-rrd.Update(false, time.Second, 60, rrd.Counter, []float64 rrd.GetUpdateValues(40), &rrdPtrLong)
+var rrd_long Rrd
+rrd_long.Interval = time.Second
+rrd_long.TotalSteps = 60
+rrd_long.DataType = rrd.Counter
 
-// get average of all data
-var avg = rrd.Avg(0, &rrdPtr, &rrdPtrLong)
+rrd.Update(rrd.GetUpdateValues(40), &rrd_short)
+rrd.Update(rrd.GetUpdateValues(40), &rrd_long)
+
+// get average of all rrd
+var avg = rrd.Avg(0, &rrd_short, &rrd_long)
 ```
 
 __rrd.Dump(rrdPtr *Rrd)__
 
-Print the Rrd to the screen in a readable format.
+Print the Rrd to the console in a readable format.
 
 ## Mutex
 
@@ -130,10 +136,18 @@ Return the output value of the interpolation that is the farthest in the `Output
 
 `rrd.TokenQueue` is used to manage rate limiting, tokens each with a unique size allow input to be tracked with priority and maximum wait time.
 
+**15MB/s**
+
 ```
-Token size: 4.00KB              last 4s rate: 12.21MB/s           last 1m rate: 15.51MB/s
-Token size: 4.00KB              last 4s rate: 12.21MB/s           last 1m rate: 13.96MB/s
-Token size: 4.00KB              last 4s rate: 11.31MB/s           last 1m rate: 16.57MB/s
+Token size: 4.00KB              last 3s rate: 17.56MB/s           last 10s rate: 15.48MB             last 30s rate: 15.48MB/s
+Token size: 4.00KB              last 3s rate: 17.56MB/s           last 10s rate: 15.48MB             last 30s rate: 15.48MB/s
+Token size: 4.00KB              last 3s rate: 8.78MB/s            last 10s rate: 12.90MB             last 30s rate: 12.90MB/s
+Token size: 4.00KB              last 3s rate: 11.42MB/s           last 10s rate: 18.61MB             last 30s rate: 18.61MB/s
+Token size: 4.00KB              last 3s rate: 11.42MB/s           last 10s rate: 18.61MB             last 30s rate: 18.61MB/s
+Token size: 4.00KB              last 3s rate: 11.42MB/s           last 10s rate: 18.61MB             last 30s rate: 18.61MB/s
+Token size: 4.00KB              last 3s rate: 11.42MB/s           last 10s rate: 18.61MB             last 30s rate: 18.61MB/s
+Token size: 4.00KB              last 3s rate: 22.83MB/s           last 10s rate: 15.95MB             last 30s rate: 15.95MB/s
+Token size: 4.00KB              last 3s rate: 22.83MB/s           last 10s rate: 15.95MB             last 30s rate: 15.95MB/s
 ```
 
 Each `rrd.Token` has a size and the cumulative rate of transfer/transmit set in `rrd.TokenQueue` is applied to all `rrd.Token`.
@@ -141,7 +155,7 @@ Each `rrd.Token` has a size and the cumulative rate of transfer/transmit set in 
 ```go
 type TokenQueue struct {
 	// the sum of each Token.Size allowed per second
-	RatePerSecond			float64
+	RatePerSecond		float64
 	Tokens				[]*Token
 	// rrd.Working with QueueToken and UnqueueToken
 	// rrd.Instant with WaitToCompleteToken

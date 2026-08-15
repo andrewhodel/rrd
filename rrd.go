@@ -51,12 +51,14 @@ type Rrd struct {
 	D			[][]*float64	`xyzdb:"D" bson:"D" json:"D"`
 	R			[][]*float64	`xyzdb:"R" bson:"R" json:"R"`
 	CurrentAvgCount		int64		`xyzdb:"CurrentAvgCount" bson:"CurrentAvgCount" json:"CurrentAvgCount"`
-	// use a pointer for FirstUpdateTs to allow nil values
 	FirstUpdateTs		*time.Time	`xyzdb:"FirstUpdateTs" bson:"FirstUpdateTs" json:"FirstUpdateTs"`
 	LastUpdateDataPoint	[]*float64	`xyzdb:"LastUpdateDataPoint" bson:"LastUpdateDataPoint" json:"LastUpdateDataPoint"`
 	LastUpdate		time.Time	`xyzdb:"LastUpdate" bson:"LastUpdate" json:"LastUpdate"`
 	MinimumDataPoints	uint64		`xyzdb:"MinimumDataPoints" bson:"MinimumDataPoints" json:"MinimumDataPoints"`
 	Interval		time.Duration	`xyzdb:"Interval" bson:"Interval" json:"Interval"`
+	TotalSteps		uint64		`xyzdb:"TotalSteps" bson:"TotalSteps" json:"TotalSteps"`
+	DataType		uint8		`xyzdb:"DataType" bson:"DataType" json:"DataType"`
+	Debug			bool		`json:"-"`
 }
 
 type Interpolation struct {
@@ -576,7 +578,7 @@ func RecalculateRate(interval time.Duration, totalSteps int64, rrdPtr *Rrd) {
 
 }
 
-func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8, updateDataPoint []*float64, rrdPtr *Rrd) {
+func Update(updateDataPoint []*float64, rrdPtr *Rrd) {
 
 	// all timing is based on system time at execution of Update
 	// data can be sent from any time zone, even ones you don't know about yet
@@ -599,7 +601,7 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 		// make all data point arrays at least the length of this update
 		for n := range (*rrdPtr).D {
 
-			if (dataType == Counter) {
+			if ((*rrdPtr).DataType == Counter) {
 
 				// Counter
 
@@ -641,25 +643,22 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 	}
 
 	if ((*rrdPtr).FirstUpdateTs == nil) {
-		if debug { fmt.Println("FirstUpdateTs is nil") }
+		if (*rrdPtr).Debug { fmt.Println("FirstUpdateTs is nil") }
 	}
 
-	// interval - ideal time between updates
-	// totalSteps - total steps of data
-	// dataType - rrd.Gauge or rrd.Counter
-	//  Gauge - values that stay within the range of defined integer types, like the value of raw materials.
-	//  Counter - values that count and can exceed the maximum of a defined integer type.
-	// updateTimeStamp - unix epoch timestamp of this update
-	// updateDataPoint - data object for this update
 	// rrdPtr - data from previous updates
-	//
-	// returns rrd.Rrd with update added
+	// updateDataPoint - data object for this update
+	// (*rrdPtr).Interval - ideal time between updates
+	// (*rrdPtr).TotalSteps - total steps of data
+	// (*rrdPtr).DataType - rrd.Gauge or rrd.Counter
+	// 	rrd.Gauge - values that stay within the range of defined integer types, like the value of raw materials.
+	// 	rrd.Counter - values that count and can exceed the maximum of a defined integer type.
 
-	if debug {
+	if (*rrdPtr).Debug {
 
-		fmt.Println("\n" + colorCodeRed + "### NEW " + dataType_string(dataType) + " UPDATE ###" + colorCodeReset)
-		fmt.Println("interval:", interval)
-		fmt.Println("totalSteps: " + strconv.FormatInt(totalSteps, 10))
+		fmt.Println("\n" + colorCodeRed + "### NEW " + data_type_string((*rrdPtr).DataType) + " UPDATE ###" + colorCodeReset)
+		fmt.Println("(*rrdPtr).Interval:", (*rrdPtr).Interval)
+		fmt.Println("(*rrdPtr).TotalSteps: " + strconv.FormatUint((*rrdPtr).TotalSteps, 10))
 		if ((*rrdPtr).FirstUpdateTs != nil) {
 			fmt.Println("firstUpdateTs:", (*(*rrdPtr).FirstUpdateTs), updateTimeStamp.Sub((*(*rrdPtr).FirstUpdateTs)), "ago")
 		}
@@ -686,19 +685,19 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 	if ((*rrdPtr).FirstUpdateTs == nil) {
 
 		// this is the first update
-		if debug { fmt.Println(colorCodeBlue + "### INSERTING FIRST UPDATE ###" + colorCodeReset) }
+		if (*rrdPtr).Debug { fmt.Println(colorCodeBlue + "### INSERTING FIRST UPDATE ###" + colorCodeReset) }
 
 		// create the array of data points
-		(*rrdPtr).D = make([][]*float64, totalSteps)
-		if (dataType == Counter) {
+		(*rrdPtr).D = make([][]*float64, (*rrdPtr).TotalSteps)
+		if ((*rrdPtr).DataType == Counter) {
 			// Counter
-			(*rrdPtr).R = make([][]*float64, totalSteps)
+			(*rrdPtr).R = make([][]*float64, (*rrdPtr).TotalSteps)
 		}
 
 		// insert the data for each data point
 		for e := range updateDataPoint {
 
-			if debug {
+			if (*rrdPtr).Debug {
 				if (updateDataPoint[e] == nil) {
 					fmt.Println("\tnil")
 				} else {
@@ -715,78 +714,78 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 
 	} else {
 
-		// if the updateTimeStamp is later than firstUpdateTs+(totalSteps*interval)
+		// if the updateTimeStamp is later than firstUpdateTs + ((*rrdPtr).TotalSteps*(*rrdPtr).Interval)
 		// or .D has a length of 0
 		// it is a new chart
-		if (updateTimeStamp.Compare((*(*rrdPtr).FirstUpdateTs).Add(time.Duration(totalSteps * 2) * interval)) >= 0 || len((*rrdPtr).D) == 0) {
+		if (updateTimeStamp.Compare((*(*rrdPtr).FirstUpdateTs).Add(time.Duration((*rrdPtr).TotalSteps * 2) * (*rrdPtr).Interval)) >= 0 || len((*rrdPtr).D) == 0) {
 			// set firstUpdateTs to nil, this will be considered the first update
-			if debug { fmt.Println(colorCodeBlue + "### THIS UPDATE IS NEW ENOUGH TO REPLACE ALL THE DATA ###" + colorCodeReset) }
+			if (*rrdPtr).Debug { fmt.Println(colorCodeBlue + "### THIS UPDATE IS NEW ENOUGH TO REPLACE ALL THE DATA ###" + colorCodeReset) }
 			(*rrdPtr).FirstUpdateTs = &updateTimeStamp
 
 			// reset all the data
-			if (dataType == Counter) {
+			if ((*rrdPtr).DataType == Counter) {
 				// counter types need a rate calculation
 				(*rrdPtr).R = nil
-				(*rrdPtr).R = make([][]*float64, totalSteps)
+				(*rrdPtr).R = make([][]*float64, (*rrdPtr).TotalSteps)
 			}
 
 			(*rrdPtr).D = nil
-			(*rrdPtr).D = make([][]*float64, totalSteps)
+			(*rrdPtr).D = make([][]*float64, (*rrdPtr).TotalSteps)
 
 		}
 
 		// this is not the first update
-		if debug { fmt.Println(colorCodeBlue + "### PROCESSING " + dataType_string(dataType) + " UPDATE ###" + colorCodeReset) }
+		if (*rrdPtr).Debug { fmt.Println(colorCodeBlue + "### PROCESSING " + data_type_string((*rrdPtr).DataType) + " UPDATE ###" + colorCodeReset) }
 
 		// this timestamp
-		if debug { fmt.Println("updateTimeStamp:", updateTimeStamp) }
+		if (*rrdPtr).Debug { fmt.Println("updateTimeStamp:", updateTimeStamp) }
 
 		// get the time steps for each position, based on firstUpdateTs
 		var timeSteps []time.Time
-		var currentStep int64 = 0
-		var c int64 = 0
-		for (c < totalSteps) {
-			timeSteps = append(timeSteps, (*(*rrdPtr).FirstUpdateTs).Add(interval * time.Duration(c)))
+		var currentStep uint64 = 0
+		var c uint64 = 0
+		for (c < (*rrdPtr).TotalSteps) {
+			timeSteps = append(timeSteps, (*(*rrdPtr).FirstUpdateTs).Add((*rrdPtr).Interval * time.Duration(c)))
 
-			if (updateTimeStamp.Compare((*(*rrdPtr).FirstUpdateTs).Add(interval * time.Duration(c))) >= 0) {
+			if (updateTimeStamp.Compare((*(*rrdPtr).FirstUpdateTs).Add((*rrdPtr).Interval * time.Duration(c))) >= 0) {
 				currentStep = c
 			}
 
 			c++
 		}
 
-		// currentTimeSlot will always be now or the newest because the loop iterates totalSteps times
-		if debug { fmt.Println("currentStep: " + strconv.FormatInt(currentStep, 10)) }
+		// currentTimeSlot will always be now or the newest because the loop iterates (*rrdPtr).TotalSteps times
+		if (*rrdPtr).Debug { fmt.Println("currentStep: " + strconv.FormatUint(currentStep, 10)) }
 
 		// now check if this update is in the current time slot or a newer one
 		if (updateTimeStamp.Compare(timeSteps[currentStep]) >= 0 && currentStep != 0) {
 			// this update is in a new time slot
 			// and it is not the first time slot (multiple updates can happen in the first time slot)
-			if debug { fmt.Println(colorCodeBlue + "##### NEW STEP ##### this update is in a new step" + colorCodeReset) }
+			if (*rrdPtr).Debug { fmt.Println(colorCodeBlue + "##### NEW STEP ##### this update is in a new step" + colorCodeReset) }
 
 			// shift the data set
-			if (currentStep == totalSteps - 1) {
+			if (currentStep == (*rrdPtr).TotalSteps - 1) {
 				// shift the data set
 
 				// calculate how much to shift by
 				var shift int64 = 1
-				if (updateTimeStamp.Compare((*(*rrdPtr).FirstUpdateTs).Add(time.Duration(totalSteps) * interval)) >= 0) {
+				if (updateTimeStamp.Compare((*(*rrdPtr).FirstUpdateTs).Add(time.Duration((*rrdPtr).TotalSteps) * (*rrdPtr).Interval)) >= 0) {
 					// this update needs to shift by more than 1 time slot
-					var time_diff = updateTimeStamp.Sub((*(*rrdPtr).FirstUpdateTs).Add(time.Duration(totalSteps) * interval))
+					var time_diff = updateTimeStamp.Sub((*(*rrdPtr).FirstUpdateTs).Add(time.Duration((*rrdPtr).TotalSteps) * (*rrdPtr).Interval))
 
-					if debug { fmt.Println("time_diff", time_diff) }
+					if (*rrdPtr).Debug { fmt.Println("time_diff", time_diff) }
 
 					// shift by the number of steps beyond the last
-					shift = (time_diff.Nanoseconds() / interval.Nanoseconds()) - 1
+					shift = (time_diff.Nanoseconds() / (*rrdPtr).Interval.Nanoseconds()) - 1
 				}
 
-				if debug { fmt.Println(colorCodeRed + "shifting data set by: " + strconv.FormatInt(shift, 10) + colorCodeReset) }
+				if (*rrdPtr).Debug { fmt.Println(colorCodeRed + "shifting data set by: " + strconv.FormatInt(shift, 10) + colorCodeReset) }
 
 				if (shift > 0) {
 
 					// shift the data set
 
-					var temp = make([][]*float64, totalSteps)
+					var temp = make([][]*float64, (*rrdPtr).TotalSteps)
 					for e := range (*rrdPtr).D {
 
 						if (int64(e) >= shift) {
@@ -801,13 +800,13 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 
 					temp = nil
 
-					if (dataType == Counter) {
+					if ((*rrdPtr).DataType == Counter) {
 
 						// Counter
 
 						// shift the existing rates
 
-						var temp = make([][]*float64, totalSteps)
+						var temp = make([][]*float64, (*rrdPtr).TotalSteps)
 						for e := range (*rrdPtr).R {
 
 							if (int64(e) >= shift) {
@@ -825,24 +824,24 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 					}
 
 					// set FirstUpdateTs based on shift
-					*(*rrdPtr).FirstUpdateTs = (*(*rrdPtr).FirstUpdateTs).Add(interval * time.Duration(shift))
+					*(*rrdPtr).FirstUpdateTs = (*(*rrdPtr).FirstUpdateTs).Add((*rrdPtr).Interval * time.Duration(shift))
 
 				}
 
 			}
 
-			if debug { fmt.Println(colorCodeBlue + "inserting data at: " + strconv.FormatInt(currentStep, 10) + colorCodeReset) }
+			if (*rrdPtr).Debug { fmt.Println(colorCodeBlue + "inserting data at: " + strconv.FormatUint(currentStep, 10) + colorCodeReset) }
 
 			// remove any data in this step because this is a NEW STEP
 			(*rrdPtr).D[currentStep] = nil
-			if (dataType == Counter) {
+			if ((*rrdPtr).DataType == Counter) {
 				// Counter
 				(*rrdPtr).R[currentStep] = nil
 			}
 
-			// handle different dataType
+			// handle different (*rrdPtr).DataType
 			// this is normal processing for an update, assuming there was no previous data missing
-			if (dataType == Gauge) {
+			if ((*rrdPtr).DataType == Gauge) {
 
 				// Gauge
 
@@ -854,7 +853,7 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 				// set the avgCount to 1
 				(*rrdPtr).CurrentAvgCount = 1
 
-			} else if (dataType == Counter) {
+			} else if ((*rrdPtr).DataType == Counter) {
 
 				// Counter
 
@@ -864,38 +863,38 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 					// add the updateDataPoint to D
 					(*rrdPtr).D[currentStep] = append((*rrdPtr).D[currentStep], updateDataPoint[e])
 
-					var steps_between int64 = 1
+					var steps_between uint64 = 1
 
 					if ((*rrdPtr).D[currentStep - steps_between] == nil) {
 
-						// the previous interval has no data
+						// the previous (*rrdPtr).Interval has no data
 						// find the one before it that does
 
 						var skip = false
 
 						for {
 
-							if (currentStep - steps_between == -1) {
-								// no previous interval has data
+							if (currentStep - steps_between == math.MaxUint64) {
+								// no previous (*rrdPtr).Interval has data
 								skip = true
 								break
 							} else if ((*rrdPtr).D[currentStep - steps_between] == nil) {
-								// this previous interval does not have data
+								// this previous (*rrdPtr).Interval does not have data
 								steps_between += 1
 								continue
 							}
 
-							// this interval has data
+							// this (*rrdPtr).Interval has data
 							break
 
 						}
 
-						if debug {
-							fmt.Printf("Previous %d intervals are nil.\n", steps_between)
+						if (*rrdPtr).Debug {
+							fmt.Printf("Previous %d (*rrdPtr).Intervals are nil.\n", steps_between)
 						}
 
 						if (skip == true) {
-							// no previous interval has data
+							// no previous (*rrdPtr).Interval has data
 							continue
 						}
 
@@ -907,15 +906,15 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 					}
 
 					// calculate the rate because this is a counter
-					// get the value of the interval
-					var intervalValue float64 = (*updateDataPoint[e]) - (*(*rrdPtr).D[currentStep - steps_between][e])
+					// get the value of the (*rrdPtr).Interval
+					var interval_value float64 = (*updateDataPoint[e]) - (*(*rrdPtr).D[currentStep - steps_between][e])
 
 					// check for a counter reset
 					// known by this update value being less than the previous
 					if ((*(*rrdPtr).D[currentStep - steps_between][e]) > (*updateDataPoint[e])) {
 
 						// the counter has reset, need to check if this happened near the 32 or 64 bit limit
-						if debug { fmt.Println(colorCodeBlue + "counter reset" + colorCodeReset) }
+						if (*rrdPtr).Debug { fmt.Println(colorCodeBlue + "counter reset" + colorCodeReset) }
 
 						if ((*(*rrdPtr).D[currentStep - steps_between][e]) < math.MaxUint32 && (*(*rrdPtr).D[currentStep - steps_between][e]) > math.MaxUint32 * .7) {
 
@@ -924,7 +923,7 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 
 							// add the remainder of subtracting the last data point from the 32 bit limit to the updateDataPoint
 							// use it for rate calculation
-							intervalValue = (*updateDataPoint[e]) + math.MaxUint32 - (*(*rrdPtr).D[currentStep - steps_between][e])
+							interval_value = (*updateDataPoint[e]) + math.MaxUint32 - (*(*rrdPtr).D[currentStep - steps_between][e])
 
 						} else if ((*(*rrdPtr).D[currentStep - steps_between][e]) < math.MaxUint64 && (*(*rrdPtr).D[currentStep - steps_between][e]) > math.MaxUint64 * .7) {
 
@@ -936,22 +935,22 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 
 							// add the remainder of subtracting the last data point from the 64 bit limit to the updateDataPoint
 							// use it for rate calculation
-							intervalValue = (*updateDataPoint[e]) + math.MaxUint64 - (*(*rrdPtr).D[currentStep - steps_between][e])
+							interval_value = (*updateDataPoint[e]) + math.MaxUint64 - (*(*rrdPtr).D[currentStep - steps_between][e])
 
 						}
 
 					}
 
-					if debug { fmt.Println("calculating the rate for " + strconv.FormatFloat(intervalValue, 'f', -1, 64) + " units within", interval) }
+					if (*rrdPtr).Debug { fmt.Println("calculating the rate for " + strconv.FormatFloat(interval_value, 'f', -1, 64) + " units within", (*rrdPtr).Interval) }
 
 					// set the rate per second as a float
-					var rate float64 = intervalValue / (float64(interval.Seconds()) * float64(steps_between))
+					var rate float64 = interval_value / (float64((*rrdPtr).Interval.Seconds()) * float64(steps_between))
 
 					for {
 
-						var interval int64 = currentStep + 1 - steps_between
+						var interval uint64 = currentStep + 1 - steps_between
 
-						if debug { fmt.Println("inserting data with rate " + strconv.FormatFloat(rate, 'f', -1, 64) + " per second at time slot " + strconv.FormatInt(interval, 10)) }
+						if (*rrdPtr).Debug { fmt.Println("inserting data with rate " + strconv.FormatFloat(rate, 'f', -1, 64) + " per second at time slot " + strconv.FormatUint(interval, 10)) }
 
 						if (len((*rrdPtr).R[interval]) <= e) {
 							// add rate
@@ -973,16 +972,16 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 				}
 
 			} else {
-				if debug { fmt.Println("unsupported dataType " + dataType_string(dataType)) }
+				if (*rrdPtr).Debug { fmt.Println("unsupported (*rrdPtr).DataType " + data_type_string((*rrdPtr).DataType)) }
 			}
 
 		} else if (len((*rrdPtr).D[currentStep]) == len(updateDataPoint)) {
 
 			// this update is in the same step group as the previous
-			if debug { fmt.Println("##### SAME STEP ##### this update is in the same step as the previous") }
+			if (*rrdPtr).Debug { fmt.Println("##### SAME STEP ##### this update is in the same step as the previous") }
 
-			// handle different dataType
-			if (dataType == Gauge) {
+			// handle different (*rrdPtr).DataType
+			if ((*rrdPtr).DataType == Gauge) {
 
 				// Gauge
 
@@ -999,7 +998,7 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 					var avg float64
 
 					// average with a value in the same step
-					if debug { fmt.Println("average with a value in the same step") }
+					if (*rrdPtr).Debug { fmt.Println("average with a value in the same step") }
 
 					// multiply the avgCount with the existing value
 					avg = float64((*rrdPtr).CurrentAvgCount) * (*(*rrdPtr).D[currentStep][e])
@@ -1013,13 +1012,13 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 					// then divide by the avgCount to get the new average
 					avg = avg/float64((*rrdPtr).CurrentAvgCount)
 
-					if debug { fmt.Println("updating data point with avg " + strconv.FormatFloat(avg, 'f', -1, 64)) }
+					if (*rrdPtr).Debug { fmt.Println("updating data point with avg " + strconv.FormatFloat(avg, 'f', -1, 64)) }
 					(*rrdPtr).D[currentStep][e] = &avg
 
 
 				}
 
-			} else if (dataType == Counter) {
+			} else if ((*rrdPtr).DataType == Counter) {
 
 				// Counter
 
@@ -1035,16 +1034,16 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 				}
 
 			} else {
-				if debug { fmt.Println("unsupported dataType " + dataType_string(dataType)) }
+				if (*rrdPtr).Debug { fmt.Println("unsupported (*rrdPtr).DataType " + data_type_string((*rrdPtr).DataType)) }
 
 			}
 		}
 
 		timeSteps = nil
 
-		if debug { fmt.Printf("data: %+v\n", (*rrdPtr).D) }
+		if (*rrdPtr).Debug { fmt.Printf("data: %+v\n", (*rrdPtr).D) }
 
-		if (debug) {
+		if ((*rrdPtr).Debug) {
 			if (len((*rrdPtr).D[currentStep]) != len(updateDataPoint)) {
 				// something is wrong
 				fmt.Printf("\nDATA LENGTH IS OFF\n\a\a")
@@ -1055,7 +1054,7 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 
 }
 
-func dataType_string(dataType uint8) (string) {
+func data_type_string(dataType uint8) (string) {
 
 	if (dataType == Counter) {
 		return "Counter"
@@ -1103,6 +1102,27 @@ func (ll *LockLess) Unlock() {
 
 func SetTokenQueueLimiter(token_queue_pointer **TokenQueue, rate_per_second float64, token_queue_type uint8) {
 
+	// create RRDs
+	var first_second_rrd_pointer Rrd
+	first_second_rrd_pointer.Interval = time.Millisecond * 10
+	first_second_rrd_pointer.TotalSteps = 100
+	first_second_rrd_pointer.DataType = Counter
+
+	var rrd_pointer Rrd
+	rrd_pointer.Interval = time.Second
+	rrd_pointer.TotalSteps = 3
+	rrd_pointer.DataType = Counter
+
+	var mid_rrd_pointer Rrd
+	mid_rrd_pointer.Interval = time.Second
+	mid_rrd_pointer.TotalSteps = 10
+	mid_rrd_pointer.DataType = Counter
+
+	var long_rrd_pointer Rrd
+	long_rrd_pointer.Interval = time.Second
+	long_rrd_pointer.TotalSteps = 30
+	long_rrd_pointer.DataType = Counter
+
 	if (*token_queue_pointer == nil) {
 
 		// create a new TokenQueue
@@ -1111,14 +1131,9 @@ func SetTokenQueueLimiter(token_queue_pointer **TokenQueue, rate_per_second floa
 		token_queue.RatePerSecond = rate_per_second
 		token_queue.Type = token_queue_type
 
-		// create RRD
-		var first_second_rrd_pointer Rrd
 		token_queue.FSRrdPointer = &first_second_rrd_pointer
-		var rrd_pointer Rrd
 		token_queue.RrdPointer = &rrd_pointer
-		var mid_rrd_pointer Rrd
 		token_queue.MidRrdPointer = &mid_rrd_pointer
-		var long_rrd_pointer Rrd
 		token_queue.LongRrdPointer = &long_rrd_pointer
 
 		// create Cond
@@ -1136,14 +1151,9 @@ func SetTokenQueueLimiter(token_queue_pointer **TokenQueue, rate_per_second floa
 		(**token_queue_pointer).RatePerSecond = rate_per_second
 		(**token_queue_pointer).Type = token_queue_type
 
-		// create RRD
-		var first_second_rrd_pointer Rrd
 		(**token_queue_pointer).FSRrdPointer = &first_second_rrd_pointer
-		var rrd_pointer Rrd
 		(**token_queue_pointer).RrdPointer = &rrd_pointer
-		var mid_rrd_pointer Rrd
 		(**token_queue_pointer).MidRrdPointer = &mid_rrd_pointer
-		var long_rrd_pointer Rrd
 		(**token_queue_pointer).LongRrdPointer = &long_rrd_pointer
 
 		(**token_queue_pointer).Unlock()
@@ -1178,10 +1188,10 @@ func SetTokenQueueLimiter(token_queue_pointer **TokenQueue, rate_per_second floa
 				(**token_queue_pointer).Lock()
 
 				// update the RRD to keep track of the rate
-				Update(false, time.Millisecond * 10, 100, Counter, GetUpdateValues(float64((*token_queue_pointer).Sum)), (*token_queue_pointer).FSRrdPointer)
-				Update(false, time.Second, 3, Counter, GetUpdateValues(float64((*token_queue_pointer).Sum)), (*token_queue_pointer).RrdPointer)
-				Update(false, time.Second, 10, Counter, GetUpdateValues(float64((*token_queue_pointer).Sum)), (*token_queue_pointer).MidRrdPointer)
-				Update(false, time.Second, 30, Counter, GetUpdateValues(float64((*token_queue_pointer).Sum)), (*token_queue_pointer).LongRrdPointer)
+				Update(GetUpdateValues(float64((*token_queue_pointer).Sum)), (*token_queue_pointer).FSRrdPointer)
+				Update(GetUpdateValues(float64((*token_queue_pointer).Sum)), (*token_queue_pointer).RrdPointer)
+				Update(GetUpdateValues(float64((*token_queue_pointer).Sum)), (*token_queue_pointer).MidRrdPointer)
+				Update(GetUpdateValues(float64((*token_queue_pointer).Sum)), (*token_queue_pointer).LongRrdPointer)
 
 				(**token_queue_pointer).Unlock()
 
@@ -1336,7 +1346,7 @@ func WaitToken(token_queue_pointer *TokenQueue, size uint64, prio uint64, max_wa
 				(*token_queue_pointer).Sum += token.Size
 
 				// there are 100 10ms intervals in 1 second
-				Update(false, time.Millisecond * 10, 100, Counter, GetUpdateValues(float64((*token_queue_pointer).Sum)), (*token_queue_pointer).FSRrdPointer)
+				Update(GetUpdateValues(float64((*token_queue_pointer).Sum)), (*token_queue_pointer).FSRrdPointer)
 
 				for l := range (*token_queue_pointer).Tokens {
 
@@ -1552,7 +1562,7 @@ func QueueToken(token_queue_pointer *TokenQueue, size uint64, prio uint64, max_w
 	token.Pending = true
 
 	// there are 100 10ms intervals in 1 second
-	Update(false, time.Millisecond * 10, 100, Counter, GetUpdateValues(float64((*token_queue_pointer).Sum)), (*token_queue_pointer).FSRrdPointer)
+	Update(GetUpdateValues(float64((*token_queue_pointer).Sum)), (*token_queue_pointer).FSRrdPointer)
 
 	(*token_queue_pointer).Unlock()
 
