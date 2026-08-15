@@ -1208,7 +1208,7 @@ func SetTokenQueueLimiter(token_queue_pointer **TokenQueue, rate_per_second floa
 
 				(*(**token_queue_pointer).Cond).Broadcast()
 
-				time.Sleep(time.Millisecond * 170)
+				time.Sleep(time.Millisecond * 10)
 
 			}
 
@@ -1452,7 +1452,7 @@ func QueueToken(token_queue_pointer *TokenQueue, size uint64, prio uint64, max_w
 
 		(*token_queue_pointer).RUnlock()
 
-		if (first_second_avg * 100 > (*token_queue_pointer).RatePerSecond) {
+		if (first_second_avg * 100 > (*token_queue_pointer).RatePerSecond * 1) {
 			time.Sleep(time.Millisecond * 10)
 			continue
 		}
@@ -1605,5 +1605,28 @@ func UnqueueToken(token_queue_pointer *TokenQueue, token_pointer *Token) {
 	(*token_queue_pointer).Unlock()
 
 	(*(*token_queue_pointer).Cond).Broadcast()
+
+}
+
+func Bytes_to_size_string(bytes uint64) (string) {
+
+	var size_string = ""
+	var bytesf = float64(bytes)
+
+	if (bytes > 1000 * 1000 * 1000 * 1000 * 1000) {
+		size_string = fmt.Sprintf("%.2fPB", bytesf / 1000 / 1000 / 1000 / 1000 / 1000)
+	} else if (bytes > 1000 * 1000 * 1000 * 1000) {
+		size_string = fmt.Sprintf("%.2fTB", bytesf / 1000 / 1000 / 1000 / 1000)
+	} else if (bytes > 1000 * 1000 * 1000) {
+		size_string = fmt.Sprintf("%.2fGB", bytesf / 1000 / 1000 / 1000)
+	} else if (bytes > 1000 * 1000) {
+		size_string = fmt.Sprintf("%.2fMB", bytesf / 1000 / 1000)
+	} else if (bytes > 1000) {
+		size_string = fmt.Sprintf("%.2fKB", bytesf / 1000)
+	} else {
+		size_string = fmt.Sprintf("%.2fB", bytesf)
+	}
+
+	return size_string
 
 }

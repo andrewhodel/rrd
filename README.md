@@ -175,7 +175,7 @@ type Token struct {
 }
 ```
 
-## rrd.Working
+## TokenQueue.Type rrd.Working
 
 This is used to read/write to disk or with extremely large RAM writes that require time.
 
@@ -215,7 +215,7 @@ for {
 }
 ```
 
-## rrd.Instant
+## TokenQueue.Type rrd.Instant
 
 This is used to write to a buffer that's expected to be instant like a socket buffer.
 
@@ -243,10 +243,6 @@ for {
 }
 
 ```
-
-## Example
-
-`example/interpolation.go` shows how to know the desired rate of a network interface based on the size of an input buffer and the disk activity.
 
 Pattern Matching
 ========
