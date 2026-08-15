@@ -588,8 +588,10 @@ func Update(debug bool, interval time.Duration, totalSteps int64, dataType uint8
 	}
 
 	if (len(updateDataPoint) < int((*rrdPtr).MinimumDataPoints)) {
-		if debug { fmt.Printf("updateDataPoint must have at least %d values\n", (*rrdPtr).MinimumDataPoints) }
-		return
+
+		fmt.Printf("updateDataPoint must have at least %d values\n", (*rrdPtr).MinimumDataPoints)
+		os.Exit(1)
+
 	} else if (len(updateDataPoint) > int((*rrdPtr).MinimumDataPoints)) {
 		// increase the minimum length when updateDataPoint is longer
 		(*rrdPtr).MinimumDataPoints = uint64(len(updateDataPoint))
