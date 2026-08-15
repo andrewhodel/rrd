@@ -131,9 +131,9 @@ Return the output value of the interpolation that is the farthest in the `Output
 `rrd.TokenQueue` is used to manage rate limiting, tokens each with a unique size allow input to be tracked with priority and maximum wait time.
 
 ```
-Token size: 4.00KB              last 5s rate: 12.21MB/s           last 1m rate: 15.51MB/s
-Token size: 4.00KB              last 5s rate: 12.21MB/s           last 1m rate: 13.96MB/s
-Token size: 4.00KB              last 5s rate: 11.31MB/s           last 1m rate: 16.57MB/s
+Token size: 4.00KB              last 4s rate: 12.21MB/s           last 1m rate: 15.51MB/s
+Token size: 4.00KB              last 4s rate: 12.21MB/s           last 1m rate: 13.96MB/s
+Token size: 4.00KB              last 4s rate: 11.31MB/s           last 1m rate: 16.57MB/s
 ```
 
 Each `rrd.Token` has a size and the cumulative rate of transfer/transmit set in `rrd.TokenQueue` is applied to all `rrd.Token`.

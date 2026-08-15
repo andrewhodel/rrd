@@ -1074,6 +1074,7 @@ type TokenQueue struct {
 	// the first second
 	FSRrdPointer			*Rrd
 	RrdPointer			*Rrd
+	MidRrdPointer			*Rrd
 	LongRrdPointer			*Rrd
 	Cond				*sync.Cond
 	Cancel				context.CancelFunc
@@ -1113,6 +1114,8 @@ func SetTokenQueueLimiter(token_queue_pointer **TokenQueue, rate_per_second floa
 		token_queue.FSRrdPointer = &first_second_rrd_pointer
 		var rrd_pointer Rrd
 		token_queue.RrdPointer = &rrd_pointer
+		var mid_rrd_pointer Rrd
+		token_queue.MidRrdPointer = &mid_rrd_pointer
 		var long_rrd_pointer Rrd
 		token_queue.LongRrdPointer = &long_rrd_pointer
 
@@ -1136,6 +1139,8 @@ func SetTokenQueueLimiter(token_queue_pointer **TokenQueue, rate_per_second floa
 		(**token_queue_pointer).FSRrdPointer = &first_second_rrd_pointer
 		var rrd_pointer Rrd
 		(**token_queue_pointer).RrdPointer = &rrd_pointer
+		var mid_rrd_pointer Rrd
+		(**token_queue_pointer).MidRrdPointer = &mid_rrd_pointer
 		var long_rrd_pointer Rrd
 		(**token_queue_pointer).LongRrdPointer = &long_rrd_pointer
 
@@ -1172,8 +1177,9 @@ func SetTokenQueueLimiter(token_queue_pointer **TokenQueue, rate_per_second floa
 
 				// update the RRD to keep track of the rate
 				Update(false, time.Millisecond * 10, 100, Counter, GetUpdateValues(float64((*token_queue_pointer).Sum)), (*token_queue_pointer).FSRrdPointer)
-				Update(false, time.Second, 5, Counter, GetUpdateValues(float64((*token_queue_pointer).Sum)), (*token_queue_pointer).RrdPointer)
-				Update(false, time.Second, 60, Counter, GetUpdateValues(float64((*token_queue_pointer).Sum)), (*token_queue_pointer).LongRrdPointer)
+				Update(false, time.Second, 3, Counter, GetUpdateValues(float64((*token_queue_pointer).Sum)), (*token_queue_pointer).RrdPointer)
+				Update(false, time.Second, 10, Counter, GetUpdateValues(float64((*token_queue_pointer).Sum)), (*token_queue_pointer).MidRrdPointer)
+				Update(false, time.Second, 30, Counter, GetUpdateValues(float64((*token_queue_pointer).Sum)), (*token_queue_pointer).LongRrdPointer)
 
 				(**token_queue_pointer).Unlock()
 
@@ -1288,7 +1294,7 @@ func WaitToken(token_queue_pointer *TokenQueue, size uint64, prio uint64, max_wa
 
 		(*token_queue_pointer).RLock()
 
-		if (Avg(0, (*token_queue_pointer).LongRrdPointer, (*token_queue_pointer).RrdPointer) > (*token_queue_pointer).RatePerSecond) {
+		if (Avg(0, (*token_queue_pointer).LongRrdPointer, (*token_queue_pointer).MidRrdPointer, (*token_queue_pointer).RrdPointer) > (*token_queue_pointer).RatePerSecond) {
 
 			// the rate is higher than TokenQueue.RatePerSecond
 			// wait
@@ -1432,7 +1438,7 @@ func QueueToken(token_queue_pointer *TokenQueue, size uint64, prio uint64, max_w
 
 	}
 
-	if (only_token == false || Avg(0, (*token_queue_pointer).LongRrdPointer, (*token_queue_pointer).RrdPointer) > (*token_queue_pointer).RatePerSecond) {
+	if (only_token == false || Avg(0, (*token_queue_pointer).LongRrdPointer, (*token_queue_pointer).MidRrdPointer, (*token_queue_pointer).RrdPointer) > (*token_queue_pointer).RatePerSecond) {
 
 		for {
 
@@ -1455,7 +1461,7 @@ func QueueToken(token_queue_pointer *TokenQueue, size uint64, prio uint64, max_w
 
 			(*token_queue_pointer).RLock()
 
-			var rrd_avg = Avg(0, (*token_queue_pointer).LongRrdPointer, (*token_queue_pointer).RrdPointer)
+			var rrd_avg = Avg(0, (*token_queue_pointer).LongRrdPointer, (*token_queue_pointer).MidRrdPointer, (*token_queue_pointer).RrdPointer)
 
 			for l := range (*token_queue_pointer).Tokens {
 

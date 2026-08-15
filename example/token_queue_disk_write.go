@@ -31,10 +31,11 @@ func main() {
 
 			(*token_queue_pointer).RLock()
 			var avg = rrd.Avg(0, (*token_queue_pointer).RrdPointer)
-			var mavg = rrd.Avg(0, (*token_queue_pointer).LongRrdPointer)
+			var midavg = rrd.Avg(0, (*token_queue_pointer).MidRrdPointer)
+			var longavg = rrd.Avg(0, (*token_queue_pointer).LongRrdPointer)
 			(*token_queue_pointer).RUnlock()
 
-			fmt.Printf("Token size: %-20slast 5s rate: %-20slast 1m rate: %-20s\n", Bytes_to_size_string(token_size.Load()), Bytes_to_size_string(uint64(avg)) + "/s", Bytes_to_size_string(uint64(mavg)) + "/s")
+			fmt.Printf("Token size: %-20slast 3s rate: %-20slast 10s rate: %-20slast 30s rate: %-20s\n", Bytes_to_size_string(token_size.Load()), Bytes_to_size_string(uint64(avg)) + "/s", Bytes_to_size_string(uint64(midavg)), Bytes_to_size_string(uint64(longavg)) + "/s")
 
 			time.Sleep(time.Millisecond * 200)
 
