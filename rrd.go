@@ -1204,11 +1204,11 @@ func SetTokenQueueLimiter(token_queue_pointer **TokenQueue, rate_per_second floa
 				Update(GetUpdateValues(float64((*token_queue_pointer).Sum)), (*token_queue_pointer).MidRrdPointer)
 				Update(GetUpdateValues(float64((*token_queue_pointer).Sum)), (*token_queue_pointer).LongRrdPointer)
 
-				(**token_queue_pointer).Unlock()
-
 				(*(**token_queue_pointer).Cond).Broadcast()
 
-				time.Sleep(time.Millisecond * 10)
+				(**token_queue_pointer).Unlock()
+
+				time.Sleep(time.Millisecond * 20)
 
 			}
 
@@ -1356,9 +1356,6 @@ func WaitToken(token_queue_pointer *TokenQueue, size uint64, prio uint64, max_wa
 
 				(*token_queue_pointer).Sum += token.Size
 
-				// there are 100 10ms intervals in 1 second
-				Update(GetUpdateValues(float64((*token_queue_pointer).Sum)), (*token_queue_pointer).FSRrdPointer)
-
 				for l := range (*token_queue_pointer).Tokens {
 
 					var this_token_pointer = (*token_queue_pointer).Tokens[l]
@@ -1452,12 +1449,11 @@ func QueueToken(token_queue_pointer *TokenQueue, size uint64, prio uint64, max_w
 
 		(*token_queue_pointer).RUnlock()
 
-		if (first_second_avg * 100 > (*token_queue_pointer).RatePerSecond * 1) {
-			time.Sleep(time.Millisecond * 10)
-			continue
+		if (first_second_avg * 100 < (*token_queue_pointer).RatePerSecond * 1) {
+			break
 		}
 
-		break
+		(*(*token_queue_pointer).Cond).Wait()
 
 	}
 
@@ -1472,15 +1468,11 @@ func QueueToken(token_queue_pointer *TokenQueue, size uint64, prio uint64, max_w
 
 			}
 
-			// find the rate of the pending tokens
-			var pending_tokens_rate uint64
-
-			// find the Time of the first token that is Pending
-			var first_pending_time *time.Time
-
 			// find the lowest Prio
 			var lowest_prio uint64 = math.MaxUint64
 			var prios = make(map[uint64] []*Token, 10)
+
+			var pending_token_count uint64
 
 			(*token_queue_pointer).RLock()
 
@@ -1493,12 +1485,7 @@ func QueueToken(token_queue_pointer *TokenQueue, size uint64, prio uint64, max_w
 				if ((*this_token_pointer).Pending == true) {
 
 					// this token is Pending
-
-					if (first_pending_time == nil) {
-						first_pending_time = &(*this_token_pointer).Time
-					}
-
-					pending_tokens_rate += (*this_token_pointer).Size
+					pending_token_count += 1
 
 				} else if ((*this_token_pointer).Prio <= lowest_prio) {
 
@@ -1511,7 +1498,7 @@ func QueueToken(token_queue_pointer *TokenQueue, size uint64, prio uint64, max_w
 
 			}
 
-			if (pending_tokens_rate == 0 && rrd_avg < (*token_queue_pointer).RatePerSecond) {
+			if (pending_token_count == 0 && rrd_avg < (*token_queue_pointer).RatePerSecond) {
 
 				// no tokens are pending, start without wait
 				(*token_queue_pointer).RUnlock()
@@ -1529,30 +1516,10 @@ func QueueToken(token_queue_pointer *TokenQueue, size uint64, prio uint64, max_w
 
 				// the token created by this QueueToken is the best token to let be Pending
 
-				if (first_pending_time == nil) {
+				if (rrd_avg < (*token_queue_pointer).RatePerSecond) {
 
-					// there are no Pending tokens
-
-					if (rrd_avg < (*token_queue_pointer).RatePerSecond) {
-
-						// the rate per second of the TokenQueue has not been breached overall
-						break
-
-					}
-
-				} else {
-
-					// get the pending_tokens_rate
-					var duration_since_first_pending_token = time.Now().Sub((*first_pending_time))
-					var actual_pending_tokens_rate = float64(pending_tokens_rate) / duration_since_first_pending_token.Seconds()
-
-					if ((*token_queue_pointer).RatePerSecond > rrd_avg + actual_pending_tokens_rate) {
-
-						// the rate per second of the TokenQueue has not been breached by Pending tokens
-						// the rate per second of the TokenQueue has not been breached overall
-						break
-
-					}
+					// the rate per second of the TokenQueue has not been breached overall
+					break
 
 				}
 
@@ -1571,9 +1538,6 @@ func QueueToken(token_queue_pointer *TokenQueue, size uint64, prio uint64, max_w
 	(*token_queue_pointer).Sum += token.Size
 
 	token.Pending = true
-
-	// there are 100 10ms intervals in 1 second
-	Update(GetUpdateValues(float64((*token_queue_pointer).Sum)), (*token_queue_pointer).FSRrdPointer)
 
 	(*token_queue_pointer).Unlock()
 
@@ -1602,9 +1566,9 @@ func UnqueueToken(token_queue_pointer *TokenQueue, token_pointer *Token) {
 
 	}
 
-	(*token_queue_pointer).Unlock()
-
 	(*(*token_queue_pointer).Cond).Broadcast()
+
+	(*token_queue_pointer).Unlock()
 
 }
 
