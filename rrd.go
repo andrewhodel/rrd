@@ -1608,20 +1608,52 @@ func UnqueueToken(token_queue_pointer *TokenQueue, token_pointer *Token) {
 
 }
 
-func Bytes_to_size_string(bytes uint64) (string) {
+func Bytes_to_size_string(bytes any) (string) {
+
+	var bytesf float64
+
+	switch v := bytes.(type) {
+		case float64:
+			bytesf = v
+		case float32:
+			bytesf = float64(v)
+		case uint64:
+			bytesf = float64(v)
+		case int64:
+			bytesf = float64(v)
+		case uint32:
+			bytesf = float64(v)
+		case int32:
+			bytesf = float64(v)
+		case uint16:
+			bytesf = float64(v)
+		case int16:
+			bytesf = float64(v)
+		case uint8:
+			bytesf = float64(v)
+		case int8:
+			bytesf = float64(v)
+		case uint:
+			bytesf = float64(v)
+		case int:
+			bytesf = float64(v)
+		case complex64:
+			fmt.Printf("%f\n", v)
+		case complex128:
+			fmt.Printf("%f\n", v)
+	}
 
 	var size_string = ""
-	var bytesf = float64(bytes)
 
-	if (bytes > 1000 * 1000 * 1000 * 1000 * 1000) {
+	if (bytesf > 1000 * 1000 * 1000 * 1000 * 1000) {
 		size_string = fmt.Sprintf("%.2fPB", bytesf / 1000 / 1000 / 1000 / 1000 / 1000)
-	} else if (bytes > 1000 * 1000 * 1000 * 1000) {
+	} else if (bytesf > 1000 * 1000 * 1000 * 1000) {
 		size_string = fmt.Sprintf("%.2fTB", bytesf / 1000 / 1000 / 1000 / 1000)
-	} else if (bytes > 1000 * 1000 * 1000) {
+	} else if (bytesf > 1000 * 1000 * 1000) {
 		size_string = fmt.Sprintf("%.2fGB", bytesf / 1000 / 1000 / 1000)
-	} else if (bytes > 1000 * 1000) {
+	} else if (bytesf > 1000 * 1000) {
 		size_string = fmt.Sprintf("%.2fMB", bytesf / 1000 / 1000)
-	} else if (bytes > 1000) {
+	} else if (bytesf > 1000) {
 		size_string = fmt.Sprintf("%.2fKB", bytesf / 1000)
 	} else {
 		size_string = fmt.Sprintf("%.2fB", bytesf)
